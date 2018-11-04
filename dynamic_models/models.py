@@ -5,9 +5,12 @@ app is installed, but the base classes can be used for a custom implementation
 without installing the app.
 """
 from django.db import models
+from django.dispatch import receiver
+from django.utils.functional import cached_property
 from model_utils import Choices
 
 from . import utils
+from . import schema
 
 
 class BaseDynamicModel(models.Model):
@@ -25,13 +28,20 @@ class BaseDynamicModel(models.Model):
     class Meta:
         abstract = True
 
-    @property
+    @cached_property
     def fields(self):
         """
         Returns the through table field instances instead of the dynamic field
         instances directly .
         """
         return self._fields.through.objects.filter(model=self)
+
+    @property
+    def app_label(self):
+        """
+        Returns the app label of this model.
+        """
+        return self._meta.app_label
 
     @property
     def model_name(self):
@@ -42,6 +52,15 @@ class BaseDynamicModel(models.Model):
         return self.name.title().replace(' ', '')
 
     @property
+    def model_hash(self):
+        """
+        Returns a hash unique to the dynamic model to be generated. The hash
+        value will be used to keep track of the most recent model definition.
+        """
+        return hash(self.table_name, tuple(f for f in self.fields))
+
+
+    @property
     def table_name(self):
         """
         Default table name is the slugified instance name with underscores
@@ -49,21 +68,28 @@ class BaseDynamicModel(models.Model):
         """
         return utils.slugify_underscore(self.name)
 
-    def get_dynamic_model(self):
+    def get_dynamic_model(self, *, regenerate=False):
         """
         Dynamically defines the model class represented by this instance. If
         regenerate is set to True, the cache will be ignored and the model will
         be regenerated from scratch. If the model has not changed and
         regenerate is set to False, the model will be retrieved from the cache.
         """
-        return type(self.model_name, (models.Model,), self._model_attrs())
+        if not regenerate:
+            cached = utils.get_cached_model(self.app_label, self.model_name)
+            if cached is not None and utils.is_latest_model(cached):
+                return cached
+
+            # First try to unregister the old model to avoid Django warning
+            utils.unregister_model(self.app_label, self.model_name)
+            return type(self.model_name, (models.Model,), self._model_attrs())
 
     def _model_meta(self):
         """
         Returns a Meta class for constructing a Django model. The Meta class
         sets the app_label, model_name, db_table, and verbose name.
         """
-        class Meta:                          # pylint: disable=missing-docstring
+        class Meta:                                                             # pylint: disable=missing-docstring
             app_label = self._meta.app_label
             model_name = self.model_name
             db_table = self.table_name
@@ -81,13 +107,27 @@ class BaseDynamicModel(models.Model):
         Returns a dict of the attributes to be used in creation of the dynamic
         model class.
         """
-        attrs = {'__module__': "{}.models".format(self._meta.app_label)}
+        attrs = {
+            '__module__': "{}.models".format(self._meta.app_label),
+            '_hash': self.model_hash
+        }
         attrs.update(
             Meta=self._model_meta(),
             **utils.default_fields(),
             **self._model_fields()
         )
         return attrs
+
+# TODO: do this inside a custom save method
+@receiver(models.signals.post_save, sender=BaseDynamicModel)
+def create_model_table(sender, instance, created, **kwargs):                    # pylint: disable=unused-argument
+    """
+    Creates the database table for the dynamic model.
+    """
+    if not created:
+        return
+    model = instance.get_dynamic_model(regenerate=True)
+    schema.create_table(model)
 
 
 class BaseDynamicField(models.Model):
@@ -162,7 +202,6 @@ class BaseDynamicModelField(models.Model):
     required = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
-    # TODO: indexable fields
 
     class Meta:
         abstract = True
