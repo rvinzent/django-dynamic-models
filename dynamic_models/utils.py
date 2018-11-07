@@ -60,3 +60,16 @@ def set_model_hash(model):
 
 def delete_model_hash(model):
     cache.delete(cache_key(model))
+
+
+class OutdatedModelError(Exception):
+    """
+    Raised when a model's schema is outdated.
+    """
+    def __init__(self, model):
+        self.message = '{} has changed since loading from the database'\
+                            .format(model)
+
+def check_latest_model(sender, instance, **kwargs):
+    if not is_latest_model(sender):
+        raise OutdatedModelError(sender)

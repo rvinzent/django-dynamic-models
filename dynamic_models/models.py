@@ -7,7 +7,7 @@ without installing the app.
 from django.db import models
 from django.dispatch import receiver
 from django.utils.functional import cached_property
-from model_utils import Choices
+from model_utils import Choices, FieldTracker
 
 from . import utils
 from . import schema
@@ -68,7 +68,6 @@ class BaseDynamicModel(models.Model):
         """
         return hash(self.table_name, tuple(f for f in self.fields))
 
-
     @property
     def table_name(self):
         """
@@ -98,7 +97,7 @@ class BaseDynamicModel(models.Model):
         Returns a Meta class for constructing a Django model. The Meta class
         sets the app_label, model_name, db_table, and verbose name.
         """
-        class Meta:                                                             # pylint: disable=missing-docstring
+        class Meta: # pylint: disable=missing-docstring
             app_label = self._meta.app_label
             model_name = self.model_name
             db_table = self.table_name
@@ -175,34 +174,52 @@ class BaseDynamicField(models.Model):
         Returns a Django model field instance based on the instance's data type
         and name.
         """
-        constructor = self._field_constructor(self.data_type)
-        return constructor(db_column=self.column_name, **options)
+        return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
-    @classmethod
-    def _field_constructor(cls, data_type):
-        return cls.FIELD_TYPES[data_type]
+    @property
+    def constructor(self):
+        return self.__class__.FIELD_TYPES[self.data_type]
 
 
-class BaseDynamicModelField(models.Model):
+class InvalidFieldError(Exception):
     """
-    Customizing the through table allows fields with the same name and data type
-    to be declared with different options. The value of 'required' is sets
-    Django's 'null' and 'blank' options when declaring the field.
+    Raised when a model field is deemed invalid.
+    """
+    def __init__(self, field, reason=None):
+        self.message = '{} is invalid'.format(field)
+        if reason:
+            self.message += ': {}'.format(reason)
+
+
+class DynamicModelField(models.Model):
+    """
+    The through table allows fields with the same name and data type to be
+    declared with different options. The value of 'required' is sets Django's
+    'null' and 'blank' options when declaring the field.
     """
     model = models.ForeignKey(
         utils.dynamic_model_class_name(),
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        editable=False
     )
     field = models.ForeignKey(
         utils.dynamic_field_class_name(),
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        editable=False
     )
+    # TODO: prohibit changing from NULL to NOT_NULL
     required = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
+    tracker = FieldTracker(fields=['required', 'unique', 'max_length'])
+
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        self._check_max_length()
+        super().save(*args, **kwargs)
 
     def get_model_field(self):
         """
@@ -218,10 +235,42 @@ class BaseDynamicModelField(models.Model):
             options['max_length'] = self.max_length
         return self.field.get_model_field(**options) # pylint: disable=no-member
 
+    def _check_max_length(self):
+        """
+        Checks that max_length is only be set for a CharField, otherwise raises
+        InvalidFieldError.
+        """
+        if self.field.constructor == models.CharField:
+            if not self.max_length:
+                raise InvalidFieldError(
+                    self.field, 'max length must be set for CharField types')
+        elif self.max_length:
+            raise InvalidFieldError(
+                self.field, 'only CharField types should set the max length')
+            
 
-class DynamicModelField(BaseDynamicModelField):
+@receiver(models.signals.pre_save, sender=DynamicModelField)
+def track_old_model_field(sender, instance, created, **kwargs):
     """
-    Through model for the default implmentations of dynamic models. A non
-    abstract wrapper for the base through table for use by default. To customize
-    through table behavior, BaseDynamicModelField should be subclassed instead.
+    Keeps track of the old model field so schema changes can be applied post
+    save if applicable. If the field is being saved for the first time, no
+    action is required.
     """
+    if created:
+        return
+    old_model = instance.model.get_dynamic_model()
+    old_field = old_model._meta.get_field(instance.field.name)
+    instance._old_model_field = old_field
+
+@receiver(models.signals.post_save, sender=DynamicModelField)
+def apply_schema_changes(sender, instance, created, **kwargs):
+    """
+    If the instance is new, add it to the model's table. Otherwise, check if
+    any of the schema have changed, and apply the schema changes if they have. 
+    """
+    model = instance.model.get_dynamic_model(regenerate=True)
+    field = model._meta.get_field(instance.field.name)
+    if created:
+        schema.add_field(model, field)
+    elif instance._tracker.changed():
+        schema.alter_field(model, instance._old_model_field, field)
