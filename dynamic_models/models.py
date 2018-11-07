@@ -19,20 +19,29 @@ class BaseDynamicModel(models.Model):
     guarantee unique table names. Table name uniqueness should be handled by the
     user upon subclassing.
     """
-    name = models.CharField(max_length=32)
+    name = models.CharField(max_length=32, editable=False)
     _fields = models.ManyToManyField(
         'DynamicField',
         through='DynamicModelField'
     )
-
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        """
+        Creates the dynamic model's table when a new instance is saved if
+        needed.
+        """
+        created = self.id is None
+        super().save(*args, **kwargs)
+        if created:
+            schema.create_table(self.get_dynamic_model())
 
     @cached_property
     def fields(self):
         """
         Returns the through table field instances instead of the dynamic field
-        instances directly .
+        instances directly so the constraints are also included.
         """
         return self._fields.through.objects.filter(model=self)
 
@@ -41,7 +50,7 @@ class BaseDynamicModel(models.Model):
         """
         Returns the app label of this model.
         """
-        return self._meta.app_label
+        return self.__class__._meta.app_label
 
     @property
     def model_name(self):
@@ -117,17 +126,6 @@ class BaseDynamicModel(models.Model):
             **self._model_fields()
         )
         return attrs
-
-# TODO: do this inside a custom save method
-@receiver(models.signals.post_save, sender=BaseDynamicModel)
-def create_model_table(sender, instance, created, **kwargs):                    # pylint: disable=unused-argument
-    """
-    Creates the database table for the dynamic model.
-    """
-    if not created:
-        return
-    model = instance.get_dynamic_model(regenerate=True)
-    schema.create_table(model)
 
 
 class BaseDynamicField(models.Model):
