@@ -5,6 +5,7 @@ from django.conf import settings
 from django.apps import apps
 from django.core.cache import cache
 from django.utils.text import slugify
+from .exceptions import OutdatedModelError
 
 
 KEY_PREFIX = settings.DYNAMIC_MODELS.get('CACHE_KEY_PREFIX', 'dynamic_models')
@@ -37,15 +38,25 @@ def default_fields():
     return settings.DYNAMIC_MODELS.get('DEFAULT_FIELDS', {})
 
 def cache_key(model):
+    """
+    Returns the cache key for dynamic model caching.
+    """
     return '{}_{}'.format(KEY_PREFIX, model._meta.model_name)
 
 def get_cached_model(app_label, model_name):
+    """
+    Returns a model from Django's app registry or None if not found.
+    """
     try:
         return apps.get_model(app_label, model_name)
     except LookupError:
         pass
 
 def unregister_model(app_label, model_name):
+    """
+    Deletes a model from Django's app registry. Returns True if the model was
+    deleted successfully and False if it was not found.
+    """
     try:
         del apps.all_models[app_label][model_name]
     except KeyError:
@@ -53,23 +64,31 @@ def unregister_model(app_label, model_name):
     return True
 
 def is_latest_model(model):
+    """
+    Checks the model hash from the provided model matches the latest hash stored
+    in the cache. 
+    """
     return cache.get(cache_key(model)) == model._hash
 
-def set_model_hash(model):
-    cache.set(cache_key(model), model._hash)
+def set_model_hash(model, timeout=60*60*24*3):
+    """
+    Sets a model's hash as the latest value. The cache timeout is three days by
+    default.
+    """
+    cache.set(cache_key(model), model._hash, timeout)
 
 def delete_model_hash(model):
+    """
+    Removes a model's hash from the cache. Effectively forces a dynamic model to
+    be regenerated the next time it is used.
+    """
     cache.delete(cache_key(model))
 
-
-class OutdatedModelError(Exception):
-    """
-    Raised when a model's schema is outdated.
-    """
-    def __init__(self, model):
-        self.message = '{} has changed since loading from the database'\
-                            .format(model)
-
 def check_latest_model(sender, instance, **kwargs):
+    """
+    Signal handler for dynamic models on pre_save to guard against the
+    possibility of a model changing schema between instance instantiation and
+    record save.
+    """
     if not is_latest_model(sender):
         raise OutdatedModelError(sender)

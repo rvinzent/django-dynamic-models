@@ -11,6 +11,7 @@ from model_utils import Choices, FieldTracker
 
 from . import utils
 from . import schema
+from .exceptions import InvalidFieldError
 
 
 class BaseDynamicModel(models.Model):
@@ -24,6 +25,8 @@ class BaseDynamicModel(models.Model):
         'DynamicField',
         through='DynamicModelField'
     )
+    _tracker = FieldTracker()
+
     class Meta:
         abstract = True
 
@@ -32,9 +35,8 @@ class BaseDynamicModel(models.Model):
         Creates the dynamic model's table when a new instance is saved if
         needed.
         """
-        created = self.id is None
         super().save(*args, **kwargs)
-        if created:
+        if self.id is None:
             schema.create_table(self.get_dynamic_model())
 
     @cached_property
@@ -85,7 +87,7 @@ class BaseDynamicModel(models.Model):
         """
         if not regenerate:
             cached = utils.get_cached_model(self.app_label, self.model_name)
-            if cached is not None and utils.is_latest_model(cached):
+            if not cached is None and utils.is_latest_model(cached):
                 return cached
 
             # First try to unregister the old model to avoid Django warning
@@ -179,16 +181,6 @@ class BaseDynamicField(models.Model):
     @property
     def constructor(self):
         return self.__class__.FIELD_TYPES[self.data_type]
-
-
-class InvalidFieldError(Exception):
-    """
-    Raised when a model field is deemed invalid.
-    """
-    def __init__(self, field, reason=None):
-        self.message = '{} is invalid'.format(field)
-        if reason:
-            self.message += ': {}'.format(reason)
 
 
 class DynamicModelField(models.Model):
