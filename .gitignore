@@ -1,0 +1,11 @@
+.vscode/
+__pycache__/
+*.py[cod]
+*$py.class
+
+.coverage
+.coverage.*
+.pytest_cache/
+
+*.log
+local_settings.py
