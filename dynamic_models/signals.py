@@ -59,9 +59,18 @@ def apply_schema_changes(sender, instance, created, **kwargs):
         schema.alter_field(model, instance._old_model_field, field)
 
 # Since we don't know the name of the concrete model yet, these handlers must be
-# connected in the app's ready function when we can get the concrete model. We
-# don't override the delete method, so it still works when deleting querysets.
-def delete_dynamic_model(sender, instance, **kwargs):
+# connected in the app's ready function when we can get the concrete model.
+def create_dynamic_model_table(sender, instance, created, **kwargs):
+    model = instance.get_dynamic_model(regenerate=True)
+    if created:
+        schema.create_table(model)
+    else:
+        disconnect_dynamic_model(model)
+        utils.delete_model_hash(model)
+    connect_dynamic_model(model)
+    utils.set_latest_model(model)
+
+def delete_dynamic_model_table(sender, instance, **kwargs):
     """
     Signal handler to delete dynamic models when the instance of their schema
     model is deleted.
@@ -69,3 +78,10 @@ def delete_dynamic_model(sender, instance, **kwargs):
     model = instance.get_dynamic_model()
     utils.delete_model_hash(model)
     schema.delete_table(model)
+
+def connect_table_handlers(model):
+    """
+    Connect schema changing signal handlers to a concrete model.
+    """
+    signals.pre_delete.connect(delete_dynamic_model_table, sender=model)
+    signals.post_save.connect(create_dynamic_model_table, sender=model)

@@ -30,15 +30,14 @@ class BaseDynamicModel(models.Model):
     class Meta:
         abstract = True
 
-    def save(self, *args, **kwargs):
+    def __init_subclass__(cls, **kwargs):
         """
-        Creates the dynamic model's table when a new instance is saved if
-        needed.
+        When this model is subclassed by a concrete model, the schema changing
+        signal handlers will be connected.
         """
-        created = self.id is None
-        super().save(*args, **kwargs)
-        if created:
-            schema.create_table(self.get_dynamic_model())
+        super().__init_subclass__(**kwargs)
+        if not cls._meta.abstract:
+            signals.connect_table_handlers(cls)
 
     @cached_property
     def fields(self):
