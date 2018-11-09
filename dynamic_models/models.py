@@ -11,7 +11,8 @@ from model_utils import Choices, FieldTracker
 
 from . import utils
 from . import schema
-from .exceptions import InvalidFieldError
+from . import signals
+from .exceptions import InvalidFieldError, OutdatedModelError
 
 
 class BaseDynamicModel(models.Model):
@@ -87,12 +88,21 @@ class BaseDynamicModel(models.Model):
         """
         if not regenerate:
             cached = utils.get_cached_model(self.app_label, self.model_name)
-            if not cached is None and utils.is_latest_model(cached):
+            if cached and utils.is_latest_model(cached):
                 return cached
 
             # First try to unregister the old model to avoid Django warning
-            utils.unregister_model(self.app_label, self.model_name)
-            return type(self.model_name, (models.Model,), self._model_attrs())
+            old_model = utils.unregister_dynamic_model(
+                self.app_label,
+                self.model_name
+            )
+            if old_model:
+                signals.disconnect_dynamic_model(old_model)
+
+            model = type(self.model_name, (models.Model,), self._model_attrs())
+            utils.set_model_hash(model._hash)
+            signals.connect_dynamic_model(model)
+            return model
 
     def _model_meta(self):
         """
@@ -240,29 +250,3 @@ class DynamicModelField(models.Model):
             raise InvalidFieldError(
                 self.field, 'only CharField types should set the max length')
             
-
-@receiver(models.signals.pre_save, sender=DynamicModelField)
-def track_old_model_field(sender, instance, created, **kwargs):
-    """
-    Keeps track of the old model field so schema changes can be applied post
-    save if applicable. If the field is being saved for the first time, no
-    action is required.
-    """
-    if created:
-        return
-    old_model = instance.model.get_dynamic_model()
-    old_field = old_model._meta.get_field(instance.field.name)
-    instance._old_model_field = old_field
-
-@receiver(models.signals.post_save, sender=DynamicModelField)
-def apply_schema_changes(sender, instance, created, **kwargs):
-    """
-    If the instance is new, add it to the model's table. Otherwise, check if
-    any of the schema have changed, and apply the schema changes if they have. 
-    """
-    model = instance.model.get_dynamic_model(regenerate=True)
-    field = model._meta.get_field(instance.field.name)
-    if created:
-        schema.add_field(model, field)
-    elif instance._tracker.changed():
-        schema.alter_field(model, instance._old_model_field, field)

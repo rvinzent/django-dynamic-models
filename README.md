@@ -15,4 +15,4 @@ This package provides abstract models to help Django developers quickly implemen
 Official version support will be tested and defined pre-release.
 
 #### Databases:
-Only databases that have the `can_rollback_ddl` feature are supported. Development is being done using a PostgreSQL backend. MySQL and SQLite3 are not supported as they cannot rollback DDL statements.
+Only databases that have the `can_rollback_ddl` feature are officially supported. Because Django wraps each test case in a transaction, testing schema changing functions does not work with backends such as MySQL and SQLite3. *Use these at your own risk*.

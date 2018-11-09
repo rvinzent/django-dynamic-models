@@ -5,7 +5,7 @@ from django.conf import settings
 from django.apps import apps
 from django.core.cache import cache
 from django.utils.text import slugify
-from .exceptions import OutdatedModelError
+from . import signals
 
 
 KEY_PREFIX = settings.DYNAMIC_MODELS.get('CACHE_KEY_PREFIX', 'dynamic_models')
@@ -52,16 +52,15 @@ def get_cached_model(app_label, model_name):
     except LookupError:
         pass
 
-def unregister_model(app_label, model_name):
+def unregister_dynamic_model(app_label, model_name):
     """
-    Deletes a model from Django's app registry. Returns True if the model was
-    deleted successfully and False if it was not found.
+    Deletes a model from Django's app registry. Returns the deleted model if
+    found or None if it was not registered.
     """
     try:
-        del apps.all_models[app_label][model_name]
-    except KeyError:
-        return False
-    return True
+        return apps.all_models[app_label].pop(model_name)
+    except LookupError:
+        pass
 
 def is_latest_model(model):
     """
@@ -83,12 +82,3 @@ def delete_model_hash(model):
     be regenerated the next time it is used.
     """
     cache.delete(cache_key(model))
-
-def check_latest_model(sender, instance, **kwargs):
-    """
-    Signal handler for dynamic models on pre_save to guard against the
-    possibility of a model changing schema between instance instantiation and
-    record save.
-    """
-    if not is_latest_model(sender):
-        raise OutdatedModelError(sender)
