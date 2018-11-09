@@ -26,7 +26,6 @@ class BaseDynamicModel(models.Model):
         'DynamicField',
         through='DynamicModelField'
     )
-    _tracker = FieldTracker()
 
     class Meta:
         abstract = True
@@ -36,8 +35,9 @@ class BaseDynamicModel(models.Model):
         Creates the dynamic model's table when a new instance is saved if
         needed.
         """
+        created = self.id is None
         super().save(*args, **kwargs)
-        if self.id is None:
+        if created:
             schema.create_table(self.get_dynamic_model())
 
     @cached_property
@@ -97,6 +97,7 @@ class BaseDynamicModel(models.Model):
                 self.model_name
             )
             if old_model:
+                utils.delete_model_hash(old_model)
                 signals.disconnect_dynamic_model(old_model)
 
             model = type(self.model_name, (models.Model,), self._model_attrs())
@@ -190,6 +191,9 @@ class BaseDynamicField(models.Model):
 
     @property
     def constructor(self):
+        """
+        Returns a callable that constructs a Django Field instance.
+        """
         return self.__class__.FIELD_TYPES[self.data_type]
 
 

@@ -3,7 +3,6 @@ from django.dispatch import receiver
 
 from . import utils
 from . import schema
-from .models import DynamicModelField
 from .exceptions import OutdatedModelError
 
 
@@ -21,7 +20,7 @@ def disconnect_dynamic_model(model):
     """
     Disconnects a dynamic model's pre_save handler.
     """
-    return signals.pre_save.disconnect(sender=model)
+    return signals.pre_save.disconnect(check_latest_model, sender=model)
 
 def check_latest_model(sender, instance, **kwargs):
     """
@@ -32,7 +31,7 @@ def check_latest_model(sender, instance, **kwargs):
     if not utils.is_latest_model(sender):
         raise OutdatedModelError(sender)
 
-@receiver(signals.pre_save, sender=DynamicModelField)
+@receiver(signals.pre_save, sender='dynamic_models.DynamicModelField')
 def track_old_model_field(sender, instance, created, **kwargs):
     """
     Keeps track of the old model field so schema changes can be applied post
@@ -45,7 +44,7 @@ def track_old_model_field(sender, instance, created, **kwargs):
     old_field = old_model._meta.get_field(instance.field.name)
     instance._old_model_field = old_field
 
-@receiver(signals.post_save, sender=DynamicModelField)
+@receiver(signals.post_save, sender='dynamic_models.DynamicModelField')
 def apply_schema_changes(sender, instance, created, **kwargs):
     """
     If the instance is new, add it to the model's table. Otherwise, check if
@@ -53,13 +52,15 @@ def apply_schema_changes(sender, instance, created, **kwargs):
     """
     model = instance.model.get_dynamic_model(regenerate=True)
     field = model._meta.get_field(instance.field.name)
+    assert hasattr(instance, '_old_model_field'), "old model field was not saved"
     if created:
         schema.add_field(model, field)
     elif instance._tracker.changed():
         schema.alter_field(model, instance._old_model_field, field)
 
 # Since we don't know the name of the concrete model yet, these handlers must be
-# connected in the app's ready function when we can get the concrete model.
+# connected in the app's ready function when we can get the concrete model. We
+# don't override the delete method, so it still works when deleting querysets.
 def delete_dynamic_model(sender, instance, **kwargs):
     """
     Signal handler to delete dynamic models when the instance of their schema
