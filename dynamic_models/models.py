@@ -19,7 +19,7 @@ from .exceptions import (
 
 # pylint: disable=no-member
 
-class BaseDynamicModel(models.Model):
+class AbstractModelSchema(models.Model):
     """
     Base model for the dynamic model definition table. The base model does not
     guarantee unique table names. Table name uniqueness should be handled by the
@@ -129,7 +129,7 @@ class BaseDynamicModel(models.Model):
         model class.
         """
         attrs = {
-            '__module__': "{}.models".format(self._meta.app_label),
+            '__module__': '{}.models'.format(self.app_label),
             '_hash': self.model_hash
         }
         attrs.update(
@@ -140,7 +140,7 @@ class BaseDynamicModel(models.Model):
         return attrs
 
 
-class BaseDynamicField(models.Model):
+class AbstractFieldSchema(models.Model):
     """
     Base model for dynamic field definitions. Data type choices are stored in
     the DATA_TYPES class attribute. Each data type should have a key set in
@@ -164,6 +164,8 @@ class BaseDynamicField(models.Model):
         DATA_TYPES.date: models.DateTimeField,
         DATA_TYPES.bool: models.BooleanField
     }
+    assert set(dt[0] for dt in DATA_TYPES).issubset(FIELD_TYPES.keys()),\
+        "All DATA_TYPES must be present in the FIELD_TYPES map"
 
     name = models.CharField(max_length=32)
     data_type = models.CharField(
@@ -171,7 +173,6 @@ class BaseDynamicField(models.Model):
         choices=DATA_TYPES,
         editable=False
     )
-
     class Meta:
         abstract = True
 

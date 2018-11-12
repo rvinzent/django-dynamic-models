@@ -1,9 +1,9 @@
-from dynamic_models import BaseDynamicModel, BaseDynamicField
+from dynamic_models import AbstractModelSchema, AbstractFieldSchema
 
 
-class DynamicModel(BaseDynamicModel):
+class DynamicModel(AbstractModelSchema):
     pass
 
 
-class DynamicField(BaseDynamicField):
+class DynamicField(AbstractFieldSchema):
     pass
