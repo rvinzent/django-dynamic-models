@@ -4,6 +4,12 @@ class DynamicModelError(Exception):
     """
 
 
+class InvalidConfigurationError(DynamicModelError):
+    """
+    Raised when the settings for the app are not configured correctly.
+    """
+
+
 class OutdatedModelError(DynamicModelError):
     """
     Raised when a model's schema is outdated.

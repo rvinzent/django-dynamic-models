@@ -19,9 +19,7 @@ def create_dynamic_model_table(sender, instance, created, **kwargs):
         schema.create_table(model)
     else:
         disconnect_dynamic_model(model)
-        utils.delete_model_hash(model)
     connect_dynamic_model(model)
-    utils.set_latest_model(model)
 
 def delete_dynamic_model_table(sender, instance, **kwargs):
     """
@@ -29,7 +27,6 @@ def delete_dynamic_model_table(sender, instance, **kwargs):
     model is deleted.
     """
     model = instance.get_dynamic_model()
-    utils.delete_model_hash(model)
     schema.delete_table(model)
 
 def connect_dynamic_model(model):
@@ -54,7 +51,8 @@ def check_latest_model(sender, instance, **kwargs):
     possibility of a model schema change between instance instantiation and
     record save.
     """
-    if not utils.is_latest_model(sender):
+    sender._schema.refresh_from_db()
+    if not utils.has_current_schema(sender._schema, sender):
         raise OutdatedModelError(sender)
 
 @receiver(signals.pre_save, sender='dynamic_models.DynamicModelField')

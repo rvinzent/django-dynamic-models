@@ -6,8 +6,9 @@ without installing the app.
 """
 from django.db import models
 from django.dispatch import receiver
-from django.utils.functional import cached_property
+from django.utils import timezone
 from django.utils.text import slugify
+from django.utils.functional import cached_property
 from model_utils import Choices, FieldTracker
 
 from . import utils
@@ -26,8 +27,9 @@ class AbstractModelSchema(models.Model):
     user upon subclassing.
     """
     name = models.CharField(max_length=32, editable=False)
+    modified = models.DateTimeField(auto_now=True)
     _fields = models.ManyToManyField(
-        'DynamicField',
+        utils.field_schema_class(),
         through='DynamicModelField'
     )
 
@@ -67,14 +69,6 @@ class AbstractModelSchema(models.Model):
         return self.name.title().replace(' ', '')
 
     @property
-    def model_hash(self):
-        """
-        Returns a hash unique to the dynamic model to be generated. The hash
-        value will be used to keep track of the most recent model definition.
-        """
-        return hash(self.table_name, tuple(f for f in self.fields))
-
-    @property
     def table_name(self):
         """
         Default table name is the slugified instance name with underscores
@@ -92,17 +86,15 @@ class AbstractModelSchema(models.Model):
         """
         if not regenerate:
             cached = utils.get_cached_model(self.app_label, self.model_name)
-            if cached and utils.is_latest_model(cached):
+            if cached and utils.has_current_schema(self, cached):
                 return cached
 
             # First try to unregister the old model to avoid Django warning
             old_model = utils.unregister_model(self.app_label, self.model_name)
             if old_model:
-                utils.delete_model_hash(old_model)
                 signals.disconnect_dynamic_model(old_model)
 
             model = type(self.model_name, (models.Model,), self._model_attrs())
-            utils.set_latest_model(model)
             signals.connect_dynamic_model(model)
             return model
 
@@ -127,11 +119,11 @@ class AbstractModelSchema(models.Model):
     def _model_attrs(self):
         """
         Returns a dict of the attributes to be used in creation of the dynamic
-        model class.
+        model class. Base attributes include a pointer to this schema instance
         """
         attrs = {
             '__module__': '{}.models'.format(self.app_label),
-            '_hash': self.model_hash
+            '_declared': timezone.now()
         }
         attrs.update(
             Meta=self._model_meta(),
@@ -215,6 +207,7 @@ class DynamicModelField(models.Model):
         on_delete=models.CASCADE,
         editable=False
     )
+    # TODO: add index option
     # TODO: allow changing NULL fields with method that overrides the check
     # and sets a validated default for all NULL values in the field
     required = models.BooleanField(default=False)
@@ -229,6 +222,9 @@ class DynamicModelField(models.Model):
     def save(self, *args, **kwargs):
         self._check_max_length()
         self._check_null_not_changed()
+        if not self.id or self.tracker.changed():
+            self.model.modified = timezone.now()
+            self.model.save()
         super().save(*args, **kwargs)
 
     def get_model_field(self):
@@ -236,12 +232,12 @@ class DynamicModelField(models.Model):
         Returns the Django model field instance represented by the instance's
         field with the applied options.
         """
+        # TODO: configure default max_length in settings
         options = {
             'null': not self.required,
             'blank': not self.required,
             'unique': self.unique
         }
-        # TODO: configure default max_length in settings
         if self.max_length:
             options['max_length'] = self.max_length
         return self.field.get_model_field(**options) 
@@ -261,7 +257,7 @@ class DynamicModelField(models.Model):
 
     def _check_null_not_changed(self):
         """
-        Checks that the value of 'null' has not gone from True to False. Data
+        Checks that the value of 'required' has not gone False to True. Data
         migrations are not currently supported.
         """
         if self.tracker.previous('required') is False and self.required:

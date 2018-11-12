@@ -1,27 +1,36 @@
 """
 Various utility functions for the dynamic models app.
 """
+from functools import lru_cache
 from django.conf import settings
 from django.apps import apps
 from django.core.cache import cache
+from django.utils import timezone
 from django.utils.text import slugify
+
 from . import signals
+from .exceptions import InvalidConfigurationError
 
 
-KEY_PREFIX = settings.DYNAMIC_MODELS.get('CACHE_KEY_PREFIX', 'dynamic_models')
+def model_schema_class():
+    schema_model = settings.DYNAMIC_MODELS.get('MODEL_SCHEMA_CLASS')
+    if not schema_model:
+        raise InvalidConfigurationError(
+            'MODEL_SCHEMA_CLASS must be set to the concrete dynamic schema model'
+        )
 
+def field_schema_class():
+    schema_model = settings.DYNAMIC_MODELS.get('FIELD_SCHEMA_CLASS')
+    if not schema_model:
+        raise InvalidConfigurationError(
+            'FIELD_SCHEMA_CLASS must be set to the concrete dynamic schema model'
+        )
 
 def default_fields():
     """
     Returns the DEFAULT_FIELDS setting.
     """
     return settings.DYNAMIC_MODELS.get('DEFAULT_FIELDS', {})
-
-def cache_key(model):
-    """
-    Returns the cache key for dynamic model caching.
-    """
-    return '{}_{}'.format(KEY_PREFIX, model._meta.model_name)
 
 def get_cached_model(app_label, model_name):
     """
@@ -39,24 +48,9 @@ def unregister_model(app_label, model_name):
     """
     return apps.all_models[app_label].pop(model_name, None)
 
-def is_latest_model(model):
+def has_current_schema(schema, model):
     """
-    Checks the model hash from the provided model matches the latest hash stored
-    in the cache. 
+    Checks that the last time the schema we changed is earlier than model
+    definition.
     """
-    return cache.get(cache_key(model)) == model._hash
-
-# TODO: configurable timeout in settings
-def set_latest_model(model, timeout=60*60*24*3):
-    """
-    Sets a model's hash as the latest value. The cache timeout is three days by
-    default.
-    """
-    cache.set(cache_key(model), model._hash, timeout)
-
-def delete_model_hash(model):
-    """
-    Removes a model's hash from the cache. Effectively forces a dynamic model to
-    be regenerated the next time it is used.
-    """
-    cache.delete(cache_key(model))
+    return schema.modified < model._declared
