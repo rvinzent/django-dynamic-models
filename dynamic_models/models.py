@@ -18,7 +18,7 @@ from .exceptions import (
 )
 
 # pylint: disable=no-member
-
+# TODO: support table name changes
 class AbstractModelSchema(models.Model):
     """
     Base model for the dynamic model definition table. The base model does not
@@ -82,6 +82,7 @@ class AbstractModelSchema(models.Model):
         """
         return slugify(self.name).replace('-', '_')
 
+    # TODO: support different base classes
     def get_dynamic_model(self, *, regenerate=False):
         """
         Dynamically defines the model class represented by this instance. If
@@ -183,19 +184,19 @@ class AbstractFieldSchema(models.Model):
         """
         return slugify(self.name).replace('-', '_')
 
-    def get_model_field(self, **options):
-        """
-        Returns a Django model field instance based on the instance's data type
-        and name.
-        """
-        return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
-
     @property
     def constructor(self):
         """
         Returns a callable that constructs a Django Field instance.
         """
         return self.__class__.FIELD_TYPES[self.data_type]
+
+    def get_model_field(self, **options):
+        """
+        Returns a Django model field instance based on the instance's data type
+        and name.
+        """
+        return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
 
 class DynamicModelField(models.Model):

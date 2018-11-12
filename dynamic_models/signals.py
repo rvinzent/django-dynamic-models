@@ -51,7 +51,7 @@ def disconnect_dynamic_model(model):
 def check_latest_model(sender, instance, **kwargs):
     """
     Signal handler for dynamic models on pre_save to guard against the
-    possibility of a model changing schema between instance instantiation and
+    possibility of a model schema change between instance instantiation and
     record save.
     """
     if not utils.is_latest_model(sender):
@@ -77,10 +77,11 @@ def apply_schema_changes(sender, instance, created, **kwargs):
     any of the schema have changed, and apply the schema changes if they have. 
     """
     model = instance.model.get_dynamic_model(regenerate=True)
+    # Must get the field instance from the model for schema editor to work
     field = model._meta.get_field(instance.field.name)
     if created:
         schema.add_field(model, field)
-    elif instance._tracker.changed():
+    elif instance.tracker.changed():
         assert hasattr(instance, '_old_model_field'),\
             "old model field was not saved"
         schema.alter_field(model, instance._old_model_field, field)
