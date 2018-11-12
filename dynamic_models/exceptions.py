@@ -21,3 +21,12 @@ class InvalidFieldError(DynamicModelError):
         self.message = '{} is invalid'.format(field)
         if reason:
             self.message += ': {}'.format(reason)
+
+
+class NullFieldChangedError(DynamicModelError):
+    """
+    Raised when a field is attempted to be change from NULL to NOT NULL without
+    a default value to fill into the columns.
+    """
+    def __init__(self, field):
+        self.message = '{} cannot be changed from NULL to NOT NULL'.format(field)

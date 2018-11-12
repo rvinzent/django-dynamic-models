@@ -7,13 +7,17 @@ without installing the app.
 from django.db import models
 from django.dispatch import receiver
 from django.utils.functional import cached_property
+from django.utils.text import slugify
 from model_utils import Choices, FieldTracker
 
 from . import utils
 from . import schema
 from . import signals
-from .exceptions import InvalidFieldError, OutdatedModelError
+from .exceptions import (
+    InvalidFieldError, OutdatedModelError, NullFieldChangedError
+)
 
+# pylint: disable=no-member
 
 class BaseDynamicModel(models.Model):
     """
@@ -58,7 +62,7 @@ class BaseDynamicModel(models.Model):
     def model_name(self):
         """
         Default model name is the capitalized name of the instance without
-        spaces.
+        spaces. Override this property to set a different naming implementation.
         """
         return self.name.title().replace(' ', '')
 
@@ -76,7 +80,7 @@ class BaseDynamicModel(models.Model):
         Default table name is the slugified instance name with underscores
         instead of hyphens.
         """
-        return utils.slugify_underscore(self.name)
+        return slugify(self.name).replace('-', '_')
 
     def get_dynamic_model(self, *, regenerate=False):
         """
@@ -91,16 +95,13 @@ class BaseDynamicModel(models.Model):
                 return cached
 
             # First try to unregister the old model to avoid Django warning
-            old_model = utils.unregister_dynamic_model(
-                self.app_label,
-                self.model_name
-            )
+            old_model = utils.unregister_model(self.app_label, self.model_name)
             if old_model:
                 utils.delete_model_hash(old_model)
                 signals.disconnect_dynamic_model(old_model)
 
             model = type(self.model_name, (models.Model,), self._model_attrs())
-            utils.set_model_hash(model._hash)
+            utils.set_latest_model(model)
             signals.connect_dynamic_model(model)
             return model
 
@@ -110,7 +111,7 @@ class BaseDynamicModel(models.Model):
         sets the app_label, model_name, db_table, and verbose name.
         """
         class Meta: # pylint: disable=missing-docstring
-            app_label = self._meta.app_label
+            app_label = self.app_label
             model_name = self.model_name
             db_table = self.table_name
             verbose_name = self.name
@@ -179,7 +180,7 @@ class BaseDynamicField(models.Model):
         """
         Returns the name of the database column created by this field.
         """
-        return utils.slugify_underscore(self.name)
+        return slugify(self.name).replace('-', '_')
 
     def get_model_field(self, **options):
         """
@@ -212,7 +213,8 @@ class DynamicModelField(models.Model):
         on_delete=models.CASCADE,
         editable=False
     )
-    # TODO: prohibit changing from NULL to NOT_NULL
+    # TODO: allow changing NULL fields with method that overrides the check
+    # and sets a validated default for all NULL values in the field
     required = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
@@ -224,6 +226,7 @@ class DynamicModelField(models.Model):
 
     def save(self, *args, **kwargs):
         self._check_max_length()
+        self._check_null_not_changed()
         super().save(*args, **kwargs)
 
     def get_model_field(self):
@@ -236,9 +239,10 @@ class DynamicModelField(models.Model):
             'blank': not self.required,
             'unique': self.unique
         }
+        # TODO: configure default max_length in settings
         if self.max_length:
             options['max_length'] = self.max_length
-        return self.field.get_model_field(**options) # pylint: disable=no-member
+        return self.field.get_model_field(**options) 
 
     def _check_max_length(self):
         """
@@ -252,4 +256,11 @@ class DynamicModelField(models.Model):
         elif self.max_length:
             raise InvalidFieldError(
                 self.field, 'only CharField types should set the max length')
-            
+
+    def _check_null_not_changed(self):
+        """
+        Checks that the value of 'null' has not gone from True to False. Data
+        migrations are not currently supported.
+        """
+        if self.tracker.previous('required') is False and self.required:
+            raise NullFieldChangedError(self.field)

@@ -11,12 +11,6 @@ from . import signals
 KEY_PREFIX = settings.DYNAMIC_MODELS.get('CACHE_KEY_PREFIX', 'dynamic_models')
 
 
-def slugify_underscore(text):
-    """
-    Returns the slugified text with hyphens replaced by underscores.
-    """
-    return slugify(text).replace('-', '_')
-
 def default_fields():
     """
     Returns the DEFAULT_FIELDS setting.
@@ -38,15 +32,12 @@ def get_cached_model(app_label, model_name):
     except LookupError:
         pass
 
-def unregister_dynamic_model(app_label, model_name):
+def unregister_model(app_label, model_name):
     """
     Deletes a model from Django's app registry. Returns the deleted model if
     found or None if it was not registered.
     """
-    try:
-        return apps.all_models[app_label].pop(model_name)
-    except LookupError:
-        pass
+    return apps.all_models[app_label].pop(model_name, None)
 
 def is_latest_model(model):
     """
@@ -55,6 +46,7 @@ def is_latest_model(model):
     """
     return cache.get(cache_key(model)) == model._hash
 
+# TODO: configurable timeout in settings
 def set_latest_model(model, timeout=60*60*24*3):
     """
     Sets a model's hash as the latest value. The cache timeout is three days by

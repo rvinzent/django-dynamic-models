@@ -6,6 +6,32 @@ from . import schema
 from .exceptions import OutdatedModelError
 
 
+def connect_table_handlers(model):
+    """
+    Connect schema changing signal handlers to a concrete model.
+    """
+    signals.pre_delete.connect(delete_dynamic_model_table, sender=model)
+    signals.post_save.connect(create_dynamic_model_table, sender=model)
+
+def create_dynamic_model_table(sender, instance, created, **kwargs):
+    model = instance.get_dynamic_model(regenerate=True)
+    if created:
+        schema.create_table(model)
+    else:
+        disconnect_dynamic_model(model)
+        utils.delete_model_hash(model)
+    connect_dynamic_model(model)
+    utils.set_latest_model(model)
+
+def delete_dynamic_model_table(sender, instance, **kwargs):
+    """
+    Signal handler to delete dynamic models when the instance of their schema
+    model is deleted.
+    """
+    model = instance.get_dynamic_model()
+    utils.delete_model_hash(model)
+    schema.delete_table(model)
+
 def connect_dynamic_model(model):
     """
     Connects a dynamically generated model to the check_latest_model handler.
@@ -52,36 +78,9 @@ def apply_schema_changes(sender, instance, created, **kwargs):
     """
     model = instance.model.get_dynamic_model(regenerate=True)
     field = model._meta.get_field(instance.field.name)
-    assert hasattr(instance, '_old_model_field'), "old model field was not saved"
     if created:
         schema.add_field(model, field)
     elif instance._tracker.changed():
+        assert hasattr(instance, '_old_model_field'),\
+            "old model field was not saved"
         schema.alter_field(model, instance._old_model_field, field)
-
-# Since we don't know the name of the concrete model yet, these handlers must be
-# connected in the app's ready function when we can get the concrete model.
-def create_dynamic_model_table(sender, instance, created, **kwargs):
-    model = instance.get_dynamic_model(regenerate=True)
-    if created:
-        schema.create_table(model)
-    else:
-        disconnect_dynamic_model(model)
-        utils.delete_model_hash(model)
-    connect_dynamic_model(model)
-    utils.set_latest_model(model)
-
-def delete_dynamic_model_table(sender, instance, **kwargs):
-    """
-    Signal handler to delete dynamic models when the instance of their schema
-    model is deleted.
-    """
-    model = instance.get_dynamic_model()
-    utils.delete_model_hash(model)
-    schema.delete_table(model)
-
-def connect_table_handlers(model):
-    """
-    Connect schema changing signal handlers to a concrete model.
-    """
-    signals.pre_delete.connect(delete_dynamic_model_table, sender=model)
-    signals.post_save.connect(create_dynamic_model_table, sender=model)
