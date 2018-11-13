@@ -6,7 +6,7 @@ from . import schema
 from .exceptions import OutdatedModelError
 
 
-def connect_table_handlers(model):
+def connect_schema_handlers(model):
     """
     Connect schema changing signal handlers to a concrete model.
     """
@@ -36,7 +36,7 @@ def connect_dynamic_model(model):
     signals.pre_save.connect(
         check_latest_model,
         sender=model,
-        dispatch_uid=model._hash
+        dispatch_uid=model.table_name
     )
 
 def disconnect_dynamic_model(model):
@@ -51,6 +51,7 @@ def check_latest_model(sender, instance, **kwargs):
     possibility of a model schema change between instance instantiation and
     record save.
     """
+    # TODO: cache the last modified time instead of query on each save
     sender._schema.refresh_from_db()
     if not utils.has_current_schema(sender._schema, sender):
         raise OutdatedModelError(sender)

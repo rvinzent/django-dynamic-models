@@ -20,6 +20,17 @@ from .exceptions import (
     InvalidFieldError, OutdatedModelError, NullFieldChangedError
 )
 
+class ModelSignalConnector(models.base.ModelBase):
+    """
+    Metaclass connects the concrete model to the signal handlers responsible for
+    changing model schema.
+    """
+    def __new__(cls, name, bases, attrs):
+        model = super().__new__(name, bases, attrs)
+        if not model._meta.abstract:
+            signals.connect_schema_handlers(model)
+        return model
+
 # pylint: disable=no-member
 # TODO: support table name changes
 class AbstractModelSchema(models.Model):
@@ -28,6 +39,8 @@ class AbstractModelSchema(models.Model):
     guarantee unique table names. Table name uniqueness should be handled by the
     user if necessary.
     """
+    __metaclass__ = ModelSignalConnector
+
     name = models.CharField(max_length=32, editable=False)
     modified = models.DateTimeField(auto_now=True)
 
@@ -156,7 +169,8 @@ class AbstractModelSchema(models.Model):
         """
         attrs = {
             '__module__': '{}.models'.format(self.app_label),
-            '_declared': timezone.now()
+            '_declared': timezone.now(),
+            '_schema': self
         }
         attrs.update(
             Meta=self._model_meta(),
@@ -193,7 +207,7 @@ class AbstractFieldSchema(models.Model):
     assert set(dt[0] for dt in DATA_TYPES).issubset(FIELD_TYPES.keys()),\
         "All DATA_TYPES must be present in the FIELD_TYPES map"
 
-    name = models.CharField(max_length=32)
+    name = models.CharField(max_length=32, editable=False)
     data_type = models.CharField(
         max_length=8,
         choices=DATA_TYPES,
