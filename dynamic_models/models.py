@@ -9,6 +9,8 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from model_utils import Choices, FieldTracker
 
 from . import utils
@@ -24,26 +26,13 @@ class AbstractModelSchema(models.Model):
     """
     Base model for the dynamic model definition table. The base model does not
     guarantee unique table names. Table name uniqueness should be handled by the
-    user upon subclassing.
+    user if necessary.
     """
     name = models.CharField(max_length=32, editable=False)
     modified = models.DateTimeField(auto_now=True)
-    _fields = models.ManyToManyField(
-        utils.field_schema_class(),
-        through='DynamicModelField'
-    )
 
     class Meta:
         abstract = True
-
-    def __init_subclass__(cls, **kwargs):
-        """
-        When this model is subclassed by a concrete model, the schema changing
-        signal handlers will be connected.
-        """
-        super().__init_subclass__(**kwargs)
-        if not cls._meta.abstract:
-            signals.connect_table_handlers(cls)
 
     @cached_property
     def fields(self):
@@ -51,7 +40,51 @@ class AbstractModelSchema(models.Model):
         Returns the through table field instances instead of the dynamic field
         instances directly so the constraints are also included.
         """
-        return self._fields.through.objects.filter(model=self)
+        model_ct = ContentType.objects.get_for_model(self)
+        return DynamicModelField.objects.prefetch_related('field').filter(
+            model_content_type=model_ct,
+            model_id=self.id
+        )
+    
+    def add_field(self, field, **options):
+        """
+        Adds a field to the model schema with the options provided as extra
+        keyword args. Valid options are 'required', 'unique', and 'max_length'.
+        """
+        return DynamicModelField.objects.create(
+            model=self,
+            field=field,
+            **options
+        )
+
+    def update_field(self, field, **options):
+        """
+        Updates the given field with new options. Does not perform an UPDATE
+        query so the schema changing signal is properly triggered. Raises
+        DoesNotExist if the field is not found.
+        """
+        field_ct = ContentType.objects.get_for_model(field)
+        field = DynamicModelField.objects.get(
+            field_content_type=field_ct,
+            field_id=field.id
+        )
+        for option, value in options.items():
+            setattr(field, option, value)
+        field.save()
+        return field
+
+    def remove_field(self, field):
+        """
+        Removes the field from the model if it exists.
+        """
+        content_types = ContentType.objects.get_for_models(self, field)
+        field = DynamicModelField.objects.filter(
+            model_content_type=content_types[self.__class__],
+            model_id=self.id,
+            field_content_type=content_types[field.__class__],
+            field_id=field.id,
+        )
+        field.delete()
 
     @property
     def app_label(self):
@@ -191,22 +224,30 @@ class AbstractFieldSchema(models.Model):
         return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
 
+# TODO: Find a better way than Generic FK to support more than one concrete
+# schema model or field models
 class DynamicModelField(models.Model):
     """
     The through table allows fields with the same name and data type to be
     declared with different options. The value of 'required' is sets Django's
     'null' and 'blank' options when declaring the field.
     """
-    model = models.ForeignKey(
-        utils.dynamic_model_class_name(),
+    model_content_type = models.ForeignKey(
+        ContentType,
         on_delete=models.CASCADE,
         editable=False
     )
-    field = models.ForeignKey(
-        utils.dynamic_field_class_name(),
+    model_id = models.PositiveIntegerField(editable=False)
+    model = GenericForeignKey('model_content_type', 'model_id')
+
+    field_content_type = models.ForeignKey(
+        ContentType,
         on_delete=models.CASCADE,
         editable=False
     )
+    field_id = models.PositiveIntegerField(editable=False)
+    field = GenericForeignKey('field_content_type', 'field_id')
+
     # TODO: add index option
     # TODO: allow changing NULL fields with method that overrides the check
     # and sets a validated default for all NULL values in the field
@@ -218,12 +259,21 @@ class DynamicModelField(models.Model):
 
     class Meta:
         abstract = True
+        # TODO: only add fields once per model without so many unique togethers
+        # Possibly better to use get_or_create / update_or_create in public API
+        # but then invalid data is still allowed at the db level 
+        unique_together = (
+            'model_content_type',
+            'model_id',
+            'field_content_type',
+            'field_id'
+        ),
 
     def save(self, *args, **kwargs):
         self._check_max_length()
         self._check_null_not_changed()
         if not self.id or self.tracker.changed():
-            self.model.modified = timezone.now()
+            # Save to update the model's timestamp
             self.model.save()
         super().save(*args, **kwargs)
 

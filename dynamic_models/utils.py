@@ -12,20 +12,6 @@ from . import signals
 from .exceptions import InvalidConfigurationError
 
 
-def model_schema_class():
-    schema_model = settings.DYNAMIC_MODELS.get('MODEL_SCHEMA_CLASS')
-    if not schema_model:
-        raise InvalidConfigurationError(
-            'MODEL_SCHEMA_CLASS must be set to the concrete dynamic schema model'
-        )
-
-def field_schema_class():
-    schema_model = settings.DYNAMIC_MODELS.get('FIELD_SCHEMA_CLASS')
-    if not schema_model:
-        raise InvalidConfigurationError(
-            'FIELD_SCHEMA_CLASS must be set to the concrete dynamic schema model'
-        )
-
 def default_fields():
     """
     Returns the DEFAULT_FIELDS setting.
