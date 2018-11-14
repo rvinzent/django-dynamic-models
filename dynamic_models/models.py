@@ -20,7 +20,7 @@ from .exceptions import (
     InvalidFieldError, OutdatedModelError, NullFieldChangedError
 )
 
-class ModelSignalConnector(models.base.ModelBase):
+class ModelSchemaBase(models.base.ModelBase):
     """
     Metaclass connects the concrete model to the signal handlers responsible for
     changing model schema.
@@ -39,7 +39,7 @@ class AbstractModelSchema(models.Model):
     guarantee unique table names. Table name uniqueness should be handled by the
     user if necessary.
     """
-    __metaclass__ = ModelSignalConnector
+    __metaclass__ = ModelSchemaBase
 
     name = models.CharField(max_length=32, editable=False)
     modified = models.DateTimeField(auto_now=True)

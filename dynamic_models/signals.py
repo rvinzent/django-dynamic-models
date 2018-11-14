@@ -82,5 +82,5 @@ def apply_schema_changes(sender, instance, created, **kwargs):
         schema.add_field(model, field)
     elif instance.tracker.changed():
         assert hasattr(instance, '_old_model_field'),\
-            "old model field was not saved"
+            "old model field was not tracked"
         schema.alter_field(model, instance._old_model_field, field)
