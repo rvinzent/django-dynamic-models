@@ -1,12 +1,13 @@
 .vscode/
 env/
 __pycache__/
+
 *.py[cod]
 *$py.class
 
+.env
 .coverage
 .coverage.*
 .pytest_cache/
 
 *.log
-local_settings.py
