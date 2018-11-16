@@ -7,7 +7,7 @@ DATABASES = {
 		'NAME': 'dynamic_models',
 		'USER': 'dynamic_models',
 		'PASSWORD': 'supersecret',
-		'HOST': '',
-		'PORT': ''
+		'HOST': '127.0.0.1',
+		'PORT': '3306'
 	}
 }
