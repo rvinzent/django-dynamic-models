@@ -25,22 +25,20 @@ class ModelSchemaBase(models.base.ModelBase):
     Metaclass connects the concrete model to the signal handlers responsible for
     changing model schema.
     """
-    def __new__(cls, name, bases, attrs):
-        model = super().__new__(name, bases, attrs)
+    def __new__(cls, name, bases, attrs, **kwargs):
+        model = super().__new__(name, bases, attrs, **kwargs)
         if not model._meta.abstract:
             signals.connect_schema_handlers(model)
         return model
 
 # pylint: disable=no-member
 # TODO: support table name changes
-class AbstractModelSchema(models.Model):
+class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """
     Base model for the dynamic model definition table. The base model does not
     guarantee unique table names. Table name uniqueness should be handled by the
     user if necessary.
     """
-    __metaclass__ = ModelSchemaBase
-
     name = models.CharField(max_length=32, editable=False)
     modified = models.DateTimeField(auto_now=True)
 
@@ -58,7 +56,7 @@ class AbstractModelSchema(models.Model):
             model_content_type=model_ct,
             model_id=self.id
         )
-    
+
     def add_field(self, field, **options):
         """
         Adds a field to the model schema with the options provided as extra
@@ -275,7 +273,7 @@ class DynamicModelField(models.Model):
         abstract = True
         # TODO: only add fields once per model without so many unique togethers
         # Possibly better to use get_or_create / update_or_create in public API
-        # but then invalid data is still allowed at the db level 
+        # but then invalid data is still allowed at the db level
         unique_together = (
             'model_content_type',
             'model_id',
@@ -283,13 +281,13 @@ class DynamicModelField(models.Model):
             'field_id'
         ),
 
-    def save(self, *args, **kwargs):
+    def save(self, **kwargs):
         self._check_max_length()
         self._check_null_not_changed()
         if not self.id or self.tracker.changed():
             # Save to update the model's timestamp
             self.model.save()
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
     def get_model_field(self):
         """
@@ -304,7 +302,7 @@ class DynamicModelField(models.Model):
         }
         if self.max_length:
             options['max_length'] = self.max_length
-        return self.field.get_model_field(**options) 
+        return self.field.get_model_field(**options)
 
     def _check_max_length(self):
         """
