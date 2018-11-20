@@ -1,0 +1,9 @@
+django-model-utils
+
+-e .
+django>=2.0
+pytest
+pytest-django
+pytest-cov
+python-decouple
+python-dotenv

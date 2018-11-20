@@ -118,7 +118,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         Default table name is the slugified instance name with underscores
         instead of hyphens.
         """
-        return slugify(self.name).replace('-', '_')
+        return '_'.join([self.app_label, slugify(self.name).replace('-', '_')])
 
     # TODO: support different base classes
     def get_dynamic_model(self, *, regenerate=False):
