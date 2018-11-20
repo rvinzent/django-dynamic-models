@@ -22,7 +22,9 @@ setup(
             'tox',
             'pytest',
             'pytest-django',
-            'pytest-cov'
+            'pytest-cov',
+            'python-decouple',
+            'python-dotenv'
     ],
     classifiers=[
         'Intended Audience :: Developers',

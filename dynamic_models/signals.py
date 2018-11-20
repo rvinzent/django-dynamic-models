@@ -6,12 +6,21 @@ from . import schema
 from .exceptions import OutdatedModelError
 
 
-def connect_schema_handlers(model):
+def connect_model_schema_handlers(model):
     """
     Connect schema changing signal handlers to a concrete model.
     """
-    signals.pre_delete.connect(delete_dynamic_model_table, sender=model)
-    signals.post_save.connect(create_dynamic_model_table, sender=model)
+    uid = '{}_model_schema'.format(model.__name__)
+    signals.pre_delete.connect(
+        delete_dynamic_model_table,
+        sender=model,
+        dispatch_uid=uid
+    )
+    signals.post_save.connect(
+        create_dynamic_model_table,
+        sender=model,
+        dispatch_uid=uid
+    )
 
 def create_dynamic_model_table(sender, instance, created, **kwargs):
     model = instance.get_dynamic_model(regenerate=True)
@@ -70,7 +79,7 @@ def track_old_model_field(sender, instance, created, **kwargs):
     instance._old_model_field = old_field
 
 @receiver(signals.post_save, sender='dynamic_models.DynamicModelField')
-def apply_schema_changes(sender, instance, created, **kwargs):
+def apply_field_schema_changes(sender, instance, created, **kwargs):
     """
     If the instance is new, add it to the model's table. Otherwise, check if
     any of the schema have changed, and apply the schema changes if they have. 
@@ -84,3 +93,12 @@ def apply_schema_changes(sender, instance, created, **kwargs):
         assert hasattr(instance, '_old_model_field'),\
             "old model field was not tracked"
         schema.alter_field(model, instance._old_model_field, field)
+
+@receiver(signals.pre_delete, sender='dynamic_models.DynamicModelField')
+def remove_field_schema(sender, instance, **kwargs):
+    """
+    Remove the field from the database table when it is deleted.
+    """
+    model = instance.get_dynamic_model()
+    field = model._meta.get_field(instance.field.name)
+    schema.remove_field(model, field)

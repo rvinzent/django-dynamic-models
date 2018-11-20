@@ -1,9 +1,11 @@
 .vscode/
 env/
+.tox/
 __pycache__/
 
 *.py[cod]
 *$py.class
+*.egg-info
 
 .env
 .coverage

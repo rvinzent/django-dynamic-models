@@ -26,12 +26,11 @@ class ModelSchemaBase(models.base.ModelBase):
     changing model schema.
     """
     def __new__(cls, name, bases, attrs, **kwargs):
-        model = super().__new__(name, bases, attrs, **kwargs)
+        model = super().__new__(cls, name, bases, attrs, **kwargs)
         if not model._meta.abstract:
-            signals.connect_schema_handlers(model)
+            signals.connect_model_schema_handlers(model)
         return model
 
-# pylint: disable=no-member
 # TODO: support table name changes
 class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """
@@ -62,6 +61,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         Adds a field to the model schema with the options provided as extra
         keyword args. Valid options are 'required', 'unique', and 'max_length'.
         """
+        del self.fields
         return DynamicModelField.objects.create(
             model=self,
             field=field,
@@ -74,6 +74,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         query so the schema changing signal is properly triggered. Raises
         DoesNotExist if the field is not found.
         """
+        del self.fields
         field_ct = ContentType.objects.get_for_model(field)
         field = DynamicModelField.objects.get(
             field_content_type=field_ct,
@@ -88,6 +89,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         """
         Removes the field from the model if it exists.
         """
+        del self.fields
         content_types = ContentType.objects.get_for_models(self, field)
         field = DynamicModelField.objects.filter(
             model_content_type=content_types[self.__class__],
@@ -243,10 +245,14 @@ class DynamicModelField(models.Model):
     The through table allows fields with the same name and data type to be
     declared with different options. The value of 'required' is sets Django's
     'null' and 'blank' options when declaring the field.
+
+    This model should only be used through the interface provided in the
+    AbstractModelSchema base class.
     """
     model_content_type = models.ForeignKey(
         ContentType,
         on_delete=models.CASCADE,
+        related_name='model_content_types',
         editable=False
     )
     model_id = models.PositiveIntegerField(editable=False)
@@ -255,6 +261,7 @@ class DynamicModelField(models.Model):
     field_content_type = models.ForeignKey(
         ContentType,
         on_delete=models.CASCADE,
+        related_name='field_content_types',
         editable=False
     )
     field_id = models.PositiveIntegerField(editable=False)
@@ -270,7 +277,6 @@ class DynamicModelField(models.Model):
     tracker = FieldTracker(fields=['required', 'unique', 'max_length'])
 
     class Meta:
-        abstract = True
         # TODO: only add fields once per model without so many unique togethers
         # Possibly better to use get_or_create / update_or_create in public API
         # but then invalid data is still allowed at the db level
