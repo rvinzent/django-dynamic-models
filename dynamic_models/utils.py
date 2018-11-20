@@ -1,14 +1,9 @@
 """
 Various utility functions for the dynamic models app.
 """
-from functools import lru_cache
 from django.conf import settings
 from django.apps import apps
-from django.core.cache import cache
-from django.utils import timezone
-from django.utils.text import slugify
 
-from . import signals
 from .exceptions import InvalidConfigurationError
 
 
@@ -16,7 +11,10 @@ def default_fields():
     """
     Returns the DEFAULT_FIELDS setting.
     """
-    return settings.DYNAMIC_MODELS.get('DEFAULT_FIELDS', {})
+    try:
+        return settings.DYNAMIC_MODELS.get('DEFAULT_FIELDS', {})
+    except AttributeError:
+        return {}
 
 def get_cached_model(app_label, model_name):
     """

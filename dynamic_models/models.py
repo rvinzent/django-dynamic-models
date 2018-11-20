@@ -16,9 +16,7 @@ from model_utils import Choices, FieldTracker
 from . import utils
 from . import schema
 from . import signals
-from .exceptions import (
-    InvalidFieldError, OutdatedModelError, NullFieldChangedError
-)
+from .exceptions import InvalidFieldError, NullFieldChangedError
 
 class ModelSchemaBase(models.base.ModelBase):
     """
