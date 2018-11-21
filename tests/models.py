@@ -6,9 +6,9 @@ from django.db import models
 from dynamic_models.models import AbstractModelSchema, AbstractFieldSchema
 
 
-class SimpleModelSchema(AbstractModelSchema):
-    extra_field = models.IntegerField()
+class ModelSchema(AbstractModelSchema):
+    pass
 
 
-class SimpleFieldSchema(AbstractFieldSchema):
-    extra_field = models.IntegerField()
+class FieldSchema(AbstractFieldSchema):
+    pass

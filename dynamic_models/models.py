@@ -132,7 +132,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
             if cached and utils.has_current_schema(self, cached):
                 return cached
 
-            # First try to unregister the old model to avoid Django warning
+        # First try to unregister the old model to avoid Django warning
         old_model = utils.unregister_model(self.app_label, self.model_name)
         if old_model:
             signals.disconnect_dynamic_model(old_model)

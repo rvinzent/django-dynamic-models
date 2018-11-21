@@ -8,6 +8,6 @@ from .base import *
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': config('DYNAMIC_MODELS_DB', default='dynamic_models')
+        'NAME': config('DYNAMIC_MODELS_DB', default='dynamic_models.db')
     }
 }

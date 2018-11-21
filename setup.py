@@ -7,7 +7,7 @@ with open(readme_file, 'r') as f:
 
 setup(
     name='django-dynamic-models',
-    version='0.1dev1',
+    version='0.1.dev1',
     url='http://github.com/rvinzent/django-dynamic-models',
     author='Ryan Vinzent',
     author_email='rvinzent217@hotmail.com',
