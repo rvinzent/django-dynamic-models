@@ -11,13 +11,13 @@ def connect_model_schema_handlers(model):
     Connect schema changing signal handlers to a concrete model.
     """
     uid = '{}_model_schema'.format(model.__name__)
-    signals.pre_delete.connect(
-        delete_dynamic_model_table,
+    signals.post_save.connect(
+        create_dynamic_model_table,
         sender=model,
         dispatch_uid=uid
     )
-    signals.post_save.connect(
-        create_dynamic_model_table,
+    signals.pre_delete.connect(
+        delete_dynamic_model_table,
         sender=model,
         dispatch_uid=uid
     )
@@ -36,6 +36,7 @@ def delete_dynamic_model_table(sender, instance, **kwargs):
     model is deleted.
     """
     model = instance.get_dynamic_model()
+    utils.unregister_model(model._meta.app_label, model._meta.model_name)
     schema.delete_table(model)
 
 def connect_dynamic_model(model):
@@ -45,7 +46,7 @@ def connect_dynamic_model(model):
     signals.pre_save.connect(
         check_latest_model,
         sender=model,
-        dispatch_uid=model.table_name
+        dispatch_uid=model._meta.db_table
     )
 
 def disconnect_dynamic_model(model):

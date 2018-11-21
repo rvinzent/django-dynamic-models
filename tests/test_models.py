@@ -51,11 +51,11 @@ def db_table_has_field(table_name, field_name):
     description = connection.instrospection.get_table_description(table_name)
     assert field_name in (field.name for field in description)
 
-def test_subclassed_models_have_base_attributes():
-    assert getattr(SimpleModelSchema, 'name', None)
-    assert getattr(SimpleModelSchema, '_fields', None)
-    assert getattr(SimpleFieldSchema, 'name', None)
-    assert getattr(SimpleFieldSchema, 'data_type', None)
+def test_subclassed_models_have_base_fields():
+    assert SimpleModelSchema._meta.get_field('name')
+    assert SimpleModelSchema._meta.get_field('modified')
+    assert SimpleFieldSchema._meta.get_field('name')
+    assert SimpleFieldSchema._meta.get_field('data_type')
 
 @pytest.mark.django_db
 def test_adding_schema_model_creates_db_table(model_schema):

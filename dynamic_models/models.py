@@ -5,18 +5,17 @@ app is installed, but the base classes can be used for a custom implementation
 without installing the app.
 """
 from django.db import models
-from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
+from django.contrib.contenttypes.fields import GenericForeignKey
 from model_utils import Choices, FieldTracker
 
 from . import utils
-from . import schema
 from . import signals
 from .exceptions import InvalidFieldError, NullFieldChangedError
+
 
 class ModelSchemaBase(models.base.ModelBase):
     """
@@ -134,13 +133,13 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
                 return cached
 
             # First try to unregister the old model to avoid Django warning
-            old_model = utils.unregister_model(self.app_label, self.model_name)
-            if old_model:
-                signals.disconnect_dynamic_model(old_model)
+        old_model = utils.unregister_model(self.app_label, self.model_name)
+        if old_model:
+            signals.disconnect_dynamic_model(old_model)
 
-            model = type(self.model_name, (models.Model,), self._model_attrs())
-            signals.connect_dynamic_model(model)
-            return model
+        model = type(self.model_name, (models.Model,), self._model_attrs())
+        signals.connect_dynamic_model(model)
+        return model
 
     def _model_meta(self):
         """
@@ -149,7 +148,6 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         """
         class Meta: # pylint: disable=missing-docstring
             app_label = self.app_label
-            model_name = self.model_name
             db_table = self.table_name
             verbose_name = self.name
         return Meta
