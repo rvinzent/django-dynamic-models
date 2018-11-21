@@ -1,11 +1,14 @@
-.vscode/
-env/
-.tox/
-__pycache__/
+.vscode
+.tox
+env
+dist
+build
+__pycache__
 
 *.py[cod]
 *$py.class
 *.egg-info
+*.db
 
 .env
 .coverage

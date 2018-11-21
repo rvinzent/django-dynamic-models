@@ -1,6 +1,8 @@
+import os
 from setuptools import setup
 
-with open('README.md', 'r') as f:
+readme_file = os.path.join(os.path.dirname(__file__), 'README.md')
+with open(readme_file, 'r') as f:
     long_description = f.read()
 
 setup(
@@ -19,12 +21,12 @@ setup(
         'django-model-utils'
     ],
     tests_require=[
-            'tox',
-            'pytest',
-            'pytest-django',
-            'pytest-cov',
-            'python-decouple',
-            'python-dotenv'
+        'tox',
+        'pytest',
+        'pytest-django',
+        'pytest-cov',
+        'python-decouple',
+        'python-dotenv'
     ],
     classifiers=[
         'Intended Audience :: Developers',
