@@ -9,10 +9,7 @@ def model_schema(request, db):
     Creates and yields an instance of the model schema. A database table should
     be created when it is loaded and cleaned up after the test.
     """
-    instance = ModelSchema.objects.create(
-        name='simple model',
-        extra_field=1
-    )
+    instance = ModelSchema.objects.create(name='simple model')
     request.addfinalizer(instance.delete)
     return instance
 
@@ -22,7 +19,7 @@ def model_schema_no_delete(db):
     Creates a model schema instance that must be manually cleaned up. Use this
     to test for correct table deletion.
     """
-    return ModelSchema.objects.create(name='simple model', extra_field=1)
+    return ModelSchema.objects.create(name='simple model')
 
 @pytest.fixture
 def int_field_schema(db):
@@ -33,16 +30,14 @@ def int_field_schema(db):
     """
     return FieldSchema.objects.create(
         name='simple integer',
-        data_type=FieldSchema.DATA_TYPES.int,
-        extra_field=1
+        data_type=FieldSchema.DATA_TYPES.int
     )
 
 @pytest.fixture
 def char_field_schema(db):
     return FieldSchema.objects.create(
         name='simple character',
-        data_type=FieldSchema.DATA_TYPES.char,
-        extra_field=1
+        data_type=FieldSchema.DATA_TYPES.char
     )
 
 def db_table_exists(table_name):
