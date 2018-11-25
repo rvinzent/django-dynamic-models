@@ -7,7 +7,7 @@ __pycache__
 
 *.py[cod]
 *$py.class
-*.egg-info
+*.egg-info/
 *.db
 
 .env

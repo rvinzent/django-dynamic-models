@@ -1,3 +1,6 @@
+"""
+Signal handlers mostly keep track of and apply schema changes for dynamic models.
+"""
 from django.db.models import signals
 from django.dispatch import receiver
 
@@ -5,6 +8,7 @@ from . import utils
 from . import schema
 from .exceptions import OutdatedModelError
 
+# pylint: disable=unused-argument
 
 def connect_model_schema_handlers(model):
     """
@@ -23,6 +27,9 @@ def connect_model_schema_handlers(model):
     )
 
 def create_dynamic_model_table(sender, instance, created, **kwargs):
+    """
+    Signal handler to create a database table when a dynamic model is saved.
+    """
     model = instance.get_dynamic_model(regenerate=True)
     if created:
         schema.create_table(model)
@@ -66,14 +73,15 @@ def check_latest_model(sender, instance, **kwargs):
     if not utils.has_current_schema(sender._schema, sender):
         raise OutdatedModelError(sender)
 
+# TODO: find better way to track old model field
 @receiver(signals.pre_save, sender='dynamic_models.DynamicModelField')
-def track_old_model_field(sender, instance, created, **kwargs):
+def track_old_model_field(sender, instance, **kwargs):
     """
     Keeps track of the old model field so schema changes can be applied post
     save if applicable. If the field is being saved for the first time, no
     action is required.
     """
-    if created:
+    if instance.id is None:
         return
     old_model = instance.model.get_dynamic_model()
     old_field = old_model._meta.get_field(instance.field.name)
@@ -83,11 +91,11 @@ def track_old_model_field(sender, instance, created, **kwargs):
 def apply_field_schema_changes(sender, instance, created, **kwargs):
     """
     If the instance is new, add it to the model's table. Otherwise, check if
-    any of the schema have changed, and apply the schema changes if they have. 
+    any of the schema have changed, and apply the schema changes if they have.
     """
     model = instance.model.get_dynamic_model(regenerate=True)
     # Must get the field instance from the model for schema editor to work
-    field = model._meta.get_field(instance.field.name)
+    field = model._meta.get_field(instance.field.column_name)
     if created:
         schema.add_field(model, field)
     elif instance.tracker.changed():
@@ -100,6 +108,6 @@ def remove_field_schema(sender, instance, **kwargs):
     """
     Remove the field from the database table when it is deleted.
     """
-    model = instance.get_dynamic_model()
-    field = model._meta.get_field(instance.field.name)
+    model = instance.model.get_dynamic_model()
+    field = model._meta.get_field(instance.field.column_name)
     schema.remove_field(model, field)

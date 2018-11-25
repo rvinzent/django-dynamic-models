@@ -41,7 +41,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     class Meta:
         abstract = True
 
-    @cached_property
+    @property
     def fields(self):
         """
         Returns the through table field instances instead of the dynamic field
@@ -58,7 +58,6 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         Adds a field to the model schema with the options provided as extra
         keyword args. Valid options are 'required', 'unique', and 'max_length'.
         """
-        del self.fields
         return DynamicModelField.objects.create(
             model=self,
             field=field,
@@ -71,7 +70,6 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         query so the schema changing signal is properly triggered. Raises
         DoesNotExist if the field is not found.
         """
-        del self.fields
         field_ct = ContentType.objects.get_for_model(field)
         field = DynamicModelField.objects.get(
             field_content_type=field_ct,
@@ -86,12 +84,11 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         """
         Removes the field from the model if it exists.
         """
-        del self.fields
         content_types = ContentType.objects.get_for_models(self, field)
         field = DynamicModelField.objects.filter(
-            model_content_type=content_types[self.__class__],
+            model_content_type=content_types[self],
             model_id=self.id,
-            field_content_type=content_types[field.__class__],
+            field_content_type=content_types[field],
             field_id=field.id,
         )
         field.delete()
@@ -156,7 +153,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         """
         Returns the model fields of the model being generated.
         """
-        return {f.name: f.get_model_field() for f in self.fields}
+        return {f.field.column_name: f.get_model_field() for f in self.fields}
 
     def _model_attrs(self):
         """
