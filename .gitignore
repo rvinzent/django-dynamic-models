@@ -3,6 +3,7 @@
 env
 dist
 build
+htmlcov
 __pycache__
 
 *.py[cod]

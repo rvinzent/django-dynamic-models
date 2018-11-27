@@ -2,7 +2,7 @@ import pytest
 from django.apps import apps
 from django.db import models
 from dynamic_models import utils
-from .conftest import registered_model_names
+from .conftest import is_registered
 from .models import ModelSchema
 
 
@@ -14,7 +14,7 @@ def test_get_cached_model():
     model_name = ModelSchema._meta.model_name
     app_label = ModelSchema._meta.app_label
     assert utils.get_cached_model(app_label, model_name) == ModelSchema
-    utils.unregister_model(app_label, model_name)
+    assert utils.unregister_model(app_label, model_name)
     assert utils.get_cached_model(app_label, model_name) is None
     apps.register_model(app_label, ModelSchema)
 
@@ -25,9 +25,9 @@ def test_unregister_model():
     """
     model_name = ModelSchema._meta.model_name
     app_label = ModelSchema._meta.app_label
-    assert model_name in registered_model_names(app_label)
-    assert ModelSchema == utils.unregister_model(app_label, model_name)
-    assert not model_name in registered_model_names(app_label)
+    assert is_registered(ModelSchema)
+    assert utils.unregister_model(app_label, model_name)
+    assert not is_registered(ModelSchema)
     apps.register_model(app_label, ModelSchema)
     
 def test_default_fields_setting(settings):

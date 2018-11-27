@@ -130,10 +130,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
                 return cached
 
         # First try to unregister the old model to avoid Django warning
-        old_model = utils.unregister_model(self.app_label, self.model_name)
-        if old_model:
-            signals.disconnect_dynamic_model(old_model)
-
+        utils.unregister_model(self.app_label, self.model_name)
         model = type(self.model_name, (models.Model,), self._model_attrs())
         signals.connect_dynamic_model(model)
         return model

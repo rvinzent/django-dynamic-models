@@ -4,6 +4,7 @@ Various utility functions for the dynamic models app.
 from django.conf import settings
 from django.apps import apps
 
+from . import signals
 from .exceptions import InvalidConfigurationError
 
 
@@ -27,10 +28,18 @@ def get_cached_model(app_label, model_name):
 
 def unregister_model(app_label, model_name):
     """
-    Deletes a model from Django's app registry. Returns the deleted model if
-    found or None if it was not registered.
+    Deletes a model from Django's app registry and disconnects any model
+    signals. Returns False if the model does not exist and True if it was
+    unregistered successfully.
     """
-    return apps.all_models[app_label].pop(model_name, None)
+    try:
+        old_model = apps.get_model(app_label, model_name)
+        del apps.all_models[app_label][model_name]
+    except (KeyError, LookupError):
+        return False
+    signals.disconnect_dynamic_model(old_model)
+    return True
+
 
 def has_current_schema(schema, model):
     """

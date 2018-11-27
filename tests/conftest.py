@@ -5,50 +5,12 @@ from django.apps import apps
 from .models import ModelSchema, FieldSchema
 
 
-@pytest.fixture
-def model_schema(request, db):
-    """
-    Creates and yields an instance of the model schema. A database table should
-    be created when it is loaded and cleaned up after the test.
-    """
-    instance = ModelSchema.objects.create(name='simple model')
-    request.addfinalizer(instance.delete)
-    return instance
-
-@pytest.fixture
-def model_schema_no_delete(db):
-    """
-    Creates a model schema instance that must be manually cleaned up. Use this
-    to test for correct table deletion.
-    """
-    return ModelSchema.objects.create(name='simple model')
-
-@pytest.fixture
-def int_field_schema(db):
-    """
-    Creates an integer field schema instance. Should not add a column to any
-    table until it is added to a model schema instance with
-    model_schema.add_field.
-    """
-    return FieldSchema.objects.create(
-        name='simple integer',
-        data_type=FieldSchema.DATA_TYPES.int
-    )
-
-@pytest.fixture
-def char_field_schema(db):
-    """
-    Creates an char field schema instance. Should not add a column to any
-    table until it is added to a model schema instance with
-    model_schema.add_field.
-    """
-    return FieldSchema.objects.create(
-        name='simple character',
-        data_type=FieldSchema.DATA_TYPES.char
-    )
+def is_registered(model):
+    apps.clear_cache()
+    return model in apps.get_models()
 
 @contextmanager
-def db_cursor():
+def _db_cursor():
     """
     Create a database cursor and close it on exit.
     """
@@ -60,17 +22,13 @@ def db_table_exists(table_name):
     """
     Checks if the table name exists in the database.
     """
-    with db_cursor() as c:
+    with _db_cursor() as c:
         return table_name in connection.introspection.table_names(c, table_name)
 
 def db_table_has_field(table_name, field_name):
     """
     Checks if the table has a given field.
     """
-    with db_cursor() as c:
+    with _db_cursor() as c:
         desc = connection.introspection.get_table_description(c, table_name)
         return field_name in [field.name for field in desc]
-
-def registered_model_names(app_label):
-    for model_name in apps.all_models[app_label].keys():
-        yield model_name

@@ -3,6 +3,7 @@ Signal handlers mostly keep track of and apply schema changes for dynamic models
 """
 from django.db.models import signals
 from django.dispatch import receiver
+from django.apps import apps
 
 from . import utils
 from . import schema
@@ -43,8 +44,8 @@ def delete_dynamic_model_table(sender, instance, **kwargs):
     model is deleted.
     """
     model = instance.get_dynamic_model()
-    utils.unregister_model(model._meta.app_label, model._meta.model_name)
     schema.delete_table(model)
+    utils.unregister_model(model._meta.app_label, model._meta.model_name)
 
 def connect_dynamic_model(model):
     """
