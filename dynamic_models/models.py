@@ -7,7 +7,6 @@ without installing the app.
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.functional import cached_property
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from model_utils import Choices, FieldTracker
@@ -308,10 +307,12 @@ class DynamicModelField(models.Model):
         if self.field.constructor == models.CharField:
             if not self.max_length:
                 raise InvalidFieldError(
-                    self.field, 'max length must be set for CharField types')
+                    self.field.column_name,
+                    'max length must be set for CharField types')
         elif self.max_length:
             raise InvalidFieldError(
-                self.field, 'only CharField types should set the max length')
+                self.field.column_name,
+                'only CharField types should set the max length')
 
     def _check_null_not_changed(self):
         """
@@ -319,4 +320,4 @@ class DynamicModelField(models.Model):
         migrations are not currently supported.
         """
         if self.tracker.previous('required') is False and self.required:
-            raise NullFieldChangedError(self.field)
+            raise NullFieldChangedError(self.field.column_name)

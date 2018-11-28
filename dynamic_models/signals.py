@@ -3,7 +3,6 @@ Signal handlers mostly keep track of and apply schema changes for dynamic models
 """
 from django.db.models import signals
 from django.dispatch import receiver
-from django.apps import apps
 
 from . import utils
 from . import schema
@@ -72,7 +71,7 @@ def check_latest_model(sender, instance, **kwargs):
     # TODO: cache the last modified time instead of query on each save
     sender._schema.refresh_from_db()
     if not utils.has_current_schema(sender._schema, sender):
-        raise OutdatedModelError(sender)
+        raise OutdatedModelError(sender.__name__)
 
 # TODO: find better way to track old model field
 @receiver(signals.pre_save, sender='dynamic_models.DynamicModelField')
@@ -85,7 +84,7 @@ def track_old_model_field(sender, instance, **kwargs):
     if instance.id is None:
         return
     old_model = instance.model.get_dynamic_model()
-    old_field = old_model._meta.get_field(instance.field.name)
+    old_field = old_model._meta.get_field(instance.field.column_name)
     instance._old_model_field = old_field
 
 @receiver(signals.post_save, sender='dynamic_models.DynamicModelField')
