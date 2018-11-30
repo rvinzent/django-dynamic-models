@@ -16,6 +16,7 @@ from . import signals
 from .exceptions import InvalidFieldError, NullFieldChangedError
 
 
+# TODO: Move this to __init_subclass__ 
 class ModelSchemaBase(models.base.ModelBase):
     """
     Metaclass connects the concrete model to the signal handlers responsible for
@@ -27,6 +28,7 @@ class ModelSchemaBase(models.base.ModelBase):
             signals.connect_model_schema_handlers(model)
         return model
 
+
 # TODO: support table name changes
 class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """
@@ -34,6 +36,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     guarantee unique table names. Table name uniqueness should be handled by the
     user if necessary.
     """
+    # TODO: consider unique constraint here
     name = models.CharField(max_length=32, editable=False)
     modified = models.DateTimeField(auto_now=True)
 
@@ -111,7 +114,8 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     def table_name(self):
         """
         Default table name is the slugified instance name with underscores
-        instead of hyphens.
+        instead of hyphens. Override this property to support a different naming
+        scheme for database tables.
         """
         return '_'.join([self.app_label, slugify(self.name).replace('-', '_')])
 
@@ -290,6 +294,7 @@ class DynamicModelField(models.Model):
         field with the applied options.
         """
         # TODO: configure default max_length in settings
+        # TODO: default field value option
         options = {
             'null': not self.required,
             'blank': not self.required,

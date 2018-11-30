@@ -7,9 +7,9 @@ from .models import ModelSchema
 
 
 def test_get_cached_model():
-    """
-    Should return the model with a given app_label and model_name from Django's
-    app registry. Model is reregistered at the end of the test.
+    """Should return the model from Django's app registry if it exists or None.
+    
+    Model is registered again at the end of the test.
     """
     model_name = ModelSchema._meta.model_name
     app_label = ModelSchema._meta.app_label
@@ -19,9 +19,9 @@ def test_get_cached_model():
     apps.register_model(app_label, ModelSchema)
 
 def test_unregister_model():
-    """
-    Should delete the model from the app registry and return it. Model is 
-    reregistered at the end of the test.
+    """Should delete the model from the app registry.
+    
+    Model is registered again at the end of the test.
     """
     model_name = ModelSchema._meta.model_name
     app_label = ModelSchema._meta.app_label
@@ -31,10 +31,7 @@ def test_unregister_model():
     apps.register_model(app_label, ModelSchema)
     
 def test_default_fields_setting(settings):
-    """
-    Should return a dict of default fields defined in settings.
-    """
+    """Should return a dict of default fields defined in settings."""
     default_setting = {'default': models.IntegerField()}
     settings.DYNAMIC_MODELS = {'DEFAULT_FIELDS': default_setting}
     assert utils.default_fields() == default_setting
-

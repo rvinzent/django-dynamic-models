@@ -2,6 +2,7 @@ import pytest
 from contextlib import contextmanager
 from django.db import connection
 from django.apps import apps
+from django.core.exceptions import FieldDoesNotExist
 from .models import ModelSchema, FieldSchema
 
 
@@ -18,6 +19,10 @@ def _db_cursor():
     yield cursor
     cursor.close()
 
+def _get_table_description(table_name):
+    with _db_cursor() as c:
+        return connection.introspection.get_table_description(c, table_name)
+
 def db_table_exists(table_name):
     """
     Checks if the table name exists in the database.
@@ -29,6 +34,14 @@ def db_table_has_field(table_name, field_name):
     """
     Checks if the table has a given field.
     """
-    with _db_cursor() as c:
-        desc = connection.introspection.get_table_description(c, table_name)
-        return field_name in [field.name for field in desc]
+    table_description = _get_table_description(table_name)
+    return field_name in [field.name for field in table_description]
+
+def db_field_allows_null(table_name, field_name):
+    table_description = _get_table_description(table_name)
+    for field in table_description:
+        if field.name == field_name:
+            return field.null_ok
+    raise FieldDoesNotExist(
+        'field {} does not exist on table {}'.format(field_name, table_name)
+    )
