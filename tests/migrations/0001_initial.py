@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name='FieldSchema',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(editable=False, max_length=32)),
+                ('name', models.CharField(editable=False, max_length=32, unique=True)),
                 ('data_type', models.CharField(choices=[('char', 'short text'), ('text', 'long text'), ('int', 'integer'), ('float', 'float'), ('bool', 'boolean'), ('date', 'date')], editable=False, max_length=8)),
             ],
             options={

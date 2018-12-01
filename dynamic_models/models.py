@@ -201,6 +201,7 @@ class AbstractFieldSchema(models.Model):
     `name`      -- the name of the field on the dynamic model
     `data_type` -- the data type of the field on the dynamic model
     """
+    # TODO: support foreign keys
     DATA_TYPES = Choices(
         ('char', 'short text'),
         ('text', 'long text'),
@@ -221,7 +222,7 @@ class AbstractFieldSchema(models.Model):
     assert set(dt[0] for dt in DATA_TYPES).issubset(FIELD_TYPES.keys()),\
         "All DATA_TYPES must be present in the FIELD_TYPES map"
 
-    name = models.CharField(max_length=32, editable=False)
+    name = models.CharField(max_length=32, unique=True, editable=False)
     data_type = models.CharField(
         max_length=8,
         choices=DATA_TYPES,
