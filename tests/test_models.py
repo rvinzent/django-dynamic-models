@@ -1,6 +1,7 @@
 import pytest
 from django.db import connection, models
 from dynamic_models import signals as dm_signals
+from dynamic_models.models import AbstractFieldSchema, DataTypes
 
 from dynamic_models import exceptions
 from .models import ModelSchema, FieldSchema
@@ -60,6 +61,10 @@ def test_subclassed_models_have_base_fields():
     assert ModelSchema._meta.get_field('modified')
     assert FieldSchema._meta.get_field('name')
     assert FieldSchema._meta.get_field('data_type')
+
+def test_imported_data_types_are_abstract_field_schema_data_types():
+    """Module should export default data types choices as DataTypes."""
+    assert DataTypes == AbstractFieldSchema.DATA_TYPES
 
 def test_adding_model_schema_creates_db_table(model_schema):
     """Should create database table for the model schema instance."""

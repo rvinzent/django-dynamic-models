@@ -245,6 +245,8 @@ class AbstractFieldSchema(models.Model):
         """Returns a Django model field instance to add to a dynamic model."""
         return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
+# Export default data types from the class
+DataTypes = AbstractFieldSchema.DATA_TYPES
 
 # TODO: Find a better way than Generic FK to support more than one concrete
 # schema model or field models
