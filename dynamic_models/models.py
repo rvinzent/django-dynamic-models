@@ -1,8 +1,11 @@
-"""
-Contains the base models and default implementations of dynamic model classes.
-The concrete default implementations can only be used when the 'dynamic_models'
-app is installed, but the base classes can be used for a custom implementation
-without installing the app.
+"""Provides the base models of dynamic model schema classes.
+
+Abstract models should be subclassed to provide extra functionality, but they
+are perfectly usable without adding any additional fields.
+
+`AbstractModelSchema` -- base model that defines dynamic models
+`AbstractFieldSchema` -- base model for defining fields to use on dynamic models
+`DynamicModelField`   -- through model for attaching fields to dynamic models 
 """
 from django.db import models
 from django.utils import timezone
@@ -18,9 +21,9 @@ from .exceptions import InvalidFieldError, NullFieldChangedError
 
 # TODO: Move this to __init_subclass__ 
 class ModelSchemaBase(models.base.ModelBase):
-    """
-    Metaclass connects the concrete model to the signal handlers responsible for
-    changing model schema.
+    """Metaclass connects the concrete model to the signal handlers.
+    
+    The handlers are responsible for changing model schema.
     """
     def __new__(cls, name, bases, attrs, **kwargs):
         model = super().__new__(cls, name, bases, attrs, **kwargs)
@@ -31,10 +34,15 @@ class ModelSchemaBase(models.base.ModelBase):
 
 # TODO: support table name changes
 class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
-    """
-    Base model for the dynamic model definition table. The base model does not
-    guarantee unique table names. Table name uniqueness should be handled by the
-    user if necessary.
+    """Base model for the dynamic model schema table.
+    
+    The base model does not guarantee unique table names. Table name uniqueness
+    should be handled by the user with appropriate `unique` or `unique_together`
+    constraints.
+    
+    Fields:
+    `name`     -- used to generate the `model_name` and `table_name` properties
+    `modified` -- a timestamp of the last time the instance wsa changed
     """
     # TODO: consider unique constraint here
     name = models.CharField(max_length=32, editable=False)
@@ -45,9 +53,11 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     @property
     def fields(self):
-        """
-        Returns the through table field instances instead of the dynamic field
-        instances directly so the constraints are also included.
+        """Return the `DynamicModelField` instances related to this schema.
+        
+        Field instances are not returned directly so the constraints are also
+        included in the returned objects. The instances returned are those
+        responsible for the
         """
         model_ct = ContentType.objects.get_for_model(self)
         return DynamicModelField.objects.prefetch_related('field').filter(
@@ -56,9 +66,12 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         )
 
     def add_field(self, field, **options):
-        """
-        Adds a field to the model schema with the options provided as extra
-        keyword args. Valid options are 'required', 'unique', and 'max_length'.
+        """Add a field to the model schema with the constraint options.
+
+        Field options are passed as keyword args:
+        `required`   -- sets NULL constraint on the generated field
+        `unique`     -- sets UNIQUE constraint on the generated field
+        `max_length` -- sets Django's max_length option on generated CharFields
         """
         return DynamicModelField.objects.create(
             model=self,
@@ -67,10 +80,10 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         )
 
     def update_field(self, field, **options):
-        """
-        Updates the given field with new options. Does not perform an UPDATE
-        query so the schema changing signal is properly triggered. Raises
-        DoesNotExist if the field is not found.
+        """Updates the given model field with new options.
+        
+        Does not perform an UPDATE query so the schema changing signal is
+        properly triggered. Raise DoesNotExist if the field is not found.
         """
         field_ct = ContentType.objects.get_for_model(field)
         field = DynamicModelField.objects.get(
@@ -83,9 +96,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         return field
 
     def remove_field(self, field):
-        """
-        Removes the field from the model if it exists.
-        """
+        """Removes the field from the model if it exists."""
         content_types = ContentType.objects.get_for_models(self, field)
         field = DynamicModelField.objects.filter(
             model_content_type=content_types[self],
@@ -97,34 +108,39 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     @property
     def app_label(self):
-        """
-        Returns the app label of this model.
-        """
+        """Returns the app label of this model."""
         return self.__class__._meta.app_label
 
     @property
     def model_name(self):
-        """
-        Default model name is the capitalized name of the instance without
-        spaces. Override this property to set a different naming implementation.
+        """Return a string name of the dynamic model class.
+
+        Default model name is the capitalized `name` field of the instance
+        without spaces. Override this property to set a different naming
+        implementation on generated dynamic models.
         """
         return self.name.title().replace(' ', '')
 
     @property
     def table_name(self):
+        """Return a string name of the database table to be generated.
+
+        Default table name is the slugified `name` of the instance with
+        underscores instead of hyphens. Override this property to support a
+        different naming scheme for database tables. The generated name should
+        be unique per database.
         """
-        Default table name is the slugified instance name with underscores
-        instead of hyphens. Override this property to support a different naming
-        scheme for database tables.
-        """
-        return '_'.join([self.app_label, slugify(self.name).replace('-', '_')])
+        return '_'.join([self.app_label, slugify(self.name)]).replace('-', '_')
 
     # TODO: support different base classes
     def get_dynamic_model(self, *, regenerate=False):
-        """
-        Dynamically defines the model class represented by this instance. If
-        regenerate is set to True, the cache will be ignored and the model will
-        be regenerated from scratch. If the model has not changed and
+        """Return a dynamic model constructed with the built-in `type` function.
+
+        Keyword arguments:
+        `regenerate` -- ignore cache and force the class to be redefined
+
+        If regenerate is set to True, the cache will be ignored and the model
+        will be regenerated from scratch. If the model has not changed and
         regenerate is set to False, the model will be retrieved from the cache.
         """
         if not regenerate:
@@ -139,9 +155,10 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         return model
 
     def _model_meta(self):
-        """
-        Returns a Meta class for constructing a Django model. The Meta class
-        sets the app_label, model_name, db_table, and verbose name.
+        """Returns a Meta object for constructing a Django model.
+        
+        The Meta class determines the model's app_label, model_name,
+        db_table, and verbose_name attributes.
         """
         class Meta: # pylint: disable=missing-docstring
             app_label = self.app_label
@@ -149,36 +166,40 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
             verbose_name = self.name
         return Meta
 
-    def _model_fields(self):
-        """
-        Returns the model fields of the model being generated.
-        """
-        return {f.field.column_name: f.get_model_field() for f in self.fields}
-
     def _model_attrs(self):
+        """Return a dict of the attributes of the dynamic model.
+        
+        Base attributes:
+        `__module__` -- required attribute of all Django models
+        `_declared`  -- timestamp of the moment of the model's definition
+        `_schema`    -- a reference to this instance
+
+        Dynamic attributes:
+        - fields declared settings.DYNAMIC_MODELS['DEFAULT_FIELDS`]
+        - fields generated from the `_model_fields` method
         """
-        Returns a dict of the attributes to be used in creation of the dynamic
-        model class. Base attributes include a pointer to this schema instance
-        """
-        attrs = {
+        return {
             '__module__': '{}.models'.format(self.app_label),
             '_declared': timezone.now(),
-            '_schema': self
-        }
-        attrs.update(
-            Meta=self._model_meta(),
+            '_schema': self,
+            'Meta': self._model_meta(),
             **utils.default_fields(),
-            **self._model_fields()
-        )
-        return attrs
+            **{f.field.column_name: f.get_model_field() for f in self.fields}
+        }
 
 
 class AbstractFieldSchema(models.Model):
-    """
-    Base model for dynamic field definitions. Data type choices are stored in
-    the DATA_TYPES class attribute. Each data type should have a key set in
-    FIELD_TYPES corresponding to the constructor to be called when generating
-    the model field.
+    """Base model for dynamic field definitions.
+    
+    Data type choices are stored in the DATA_TYPES class attribute. DATA_TYPES
+    should be a valid `choices` object.
+    
+    Each data type should have a key set in FIELD_TYPES mapping to the
+    constructor of a Django `Field` class.
+
+    Fields:
+    `name`      -- the name of the field on the dynamic model
+    `data_type` -- the data type of the field on the dynamic model
     """
     DATA_TYPES = Choices(
         ('char', 'short text'),
@@ -211,36 +232,35 @@ class AbstractFieldSchema(models.Model):
 
     @property
     def column_name(self):
-        """
-        Returns the name of the database column created by this field.
-        """
+        """Return the name of the database column created by this field."""
         return slugify(self.name).replace('-', '_')
 
     @property
     def constructor(self):
-        """
-        Returns a callable that constructs a Django Field instance.
-        """
+        """Return a callable that constructs a Django Field instance."""
         return self.__class__.FIELD_TYPES[self.data_type]
 
     def get_model_field(self, **options):
-        """
-        Returns a Django model field instance based on the instance's data type
-        and name.
-        """
+        """Returns a Django model field instance to add to a dynamic model."""
         return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
 
 # TODO: Find a better way than Generic FK to support more than one concrete
 # schema model or field models
 class DynamicModelField(models.Model):
-    """
-    The through table allows fields with the same name and data type to be
-    declared with different options. The value of 'required' is sets Django's
-    'null' and 'blank' options when declaring the field.
+    """Through table for model schema objects to field schema objects.
 
-    This model should only be used through the interface provided in the
-    AbstractModelSchema base class.
+    This model should only be interacted with by the interface provided in the
+    AbstractModelSchema base class. It is responsible for generating model
+    fields with customized constraints.
+
+    Fields:
+    `model`      -- a generic foreign key pointing to an AbstractModelSchema 
+    `field`      -- a generic foreign key pointing to an AbstractFieldSchema
+    `required`   -- sets the NULL contstraint; default: False
+    `unique`     -- sets the UNIQUE constraint; default: False
+    `max_length` -- sets the `max_length` option required for `CharField`s
+    `tracker`    -- a `FieldTracker` instance from `django-model-utils` package
     """
     model_content_type = models.ForeignKey(
         ContentType,
@@ -270,9 +290,6 @@ class DynamicModelField(models.Model):
     tracker = FieldTracker(fields=['required', 'unique', 'max_length'])
 
     class Meta:
-        # TODO: only add fields once per model without so many unique togethers
-        # Possibly better to use get_or_create / update_or_create in public API
-        # but then invalid data is still allowed at the db level
         unique_together = (
             'model_content_type',
             'model_id',
@@ -281,18 +298,15 @@ class DynamicModelField(models.Model):
         ),
 
     def save(self, **kwargs):
+        """Run field validation and update model's timestamp then save to db."""
         self._check_max_length()
         self._check_null_not_changed()
         if not self.id or self.tracker.changed():
-            # Save to update the model's timestamp
-            self.model.save()
+            self.model.save() # Save to update the model's timestamp
         super().save(**kwargs)
 
     def get_model_field(self):
-        """
-        Returns the Django model field instance represented by the instance's
-        field with the applied options.
-        """
+        """Return the Django model field instance with constraint options."""
         # TODO: configure default max_length in settings
         # TODO: default field value option
         options = {
@@ -305,9 +319,9 @@ class DynamicModelField(models.Model):
         return self.field.get_model_field(**options)
 
     def _check_max_length(self):
-        """
-        Checks that max_length is only be set for a CharField, otherwise raises
-        InvalidFieldError.
+        """Check that `max_length` is only set for `CharField` generation.
+        
+        Raise `InvalidFieldError` if incorrectly configured.
         """
         if self.field.constructor == models.CharField:
             if not self.max_length:
@@ -320,9 +334,10 @@ class DynamicModelField(models.Model):
                 'only CharField types should set the max length')
 
     def _check_null_not_changed(self):
-        """
-        Checks that the value of 'required' has not gone False to True. Data
-        migrations are not currently supported.
+        """Check the value of `required` has not been turned from False to True.
+        
+        Data migrations are not currently supported, but are planned in a future
+        release in which case this method will no longer be necessary.
         """
         if self.tracker.previous('required') is False and self.required:
             raise NullFieldChangedError(self.field.column_name)

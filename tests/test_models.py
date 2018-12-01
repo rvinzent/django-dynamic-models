@@ -128,7 +128,7 @@ def test_updating_field_updates_db_schema(model_schema, int_field_schema):
 def test_char_field_requires_max_length(model_schema, char_field_schema):
     """Adding a character field requires a `max_length` to be set.
     
-    Raises `InvalidFieldError` when `max_length` is not declared.
+    Raise `InvalidFieldError` when `max_length` is not declared.
     """
     with pytest.raises(exceptions.InvalidFieldError,
             match=char_field_schema.column_name):
@@ -138,7 +138,7 @@ def test_char_field_requires_max_length(model_schema, char_field_schema):
 def test_non_char_fields_cannot_have_max_length(model_schema, int_field_schema):
     """Only character fields should be able to set `max_length`.
 
-    Raises `InvalidFieldError` if a field of a different type attempts to
+    Raise `InvalidFieldError` if a field of a different type attempts to
     configure the `max_length`.
     """
     with pytest.raises(exceptions.InvalidFieldError,
@@ -158,7 +158,7 @@ def test_cannot_change_not_required_to_required(model_schema, int_field_schema):
         null_field.save()
 
 def test_schema_timestamp_updated_on_field_change(model_schema, int_field_schema):
-    """The model schema's timestamp should be updated when a field is changed."""
+    """Model schema's timestamp should be updated when a field is changed."""
     field = model_schema.add_field(int_field_schema, required=True)
     initial_time = model_schema.modified
     field.required = False
@@ -189,7 +189,7 @@ def test_CRUD_dynamic_models_instances(model_schema, int_field_schema):
 def test_cannot_save_with_outdated_model(model_schema, int_field_schema):
     """Outdated model schema cannot be used to insert new records.
     
-    Raises `OutdatedModelError` when this is attempted.
+    Raise `OutdatedModelError` when this is attempted.
     """
     model = model_schema.get_dynamic_model()
     model_schema.add_field(int_field_schema, required=False)
