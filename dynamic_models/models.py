@@ -7,16 +7,19 @@ are perfectly usable without adding any additional fields.
 `AbstractFieldSchema` -- base model for defining fields to use on dynamic models
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
+from functools import partial
+
 from django.db import models
 from django.apps import apps
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
-from model_utils import Choices, FieldTracker
+from model_utils import Choices
 
 from . import utils
 from . import signals
+from . import schema
 from . import exceptions
 from . import factory
 
@@ -30,7 +33,6 @@ class ModelSchemaBase(models.base.ModelBase):
         return model
 
 
-# TODO: support table name changes
 class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """Base model for the dynamic model schema table.
 
@@ -43,6 +45,10 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     class Meta:
         abstract = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._old_table_name = self.table_name
 
     @property
     def app_label(self):
@@ -73,11 +79,44 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
             model_id=self.id
         )
 
+    @property
+    def schema_editor(self):
+        return schema.ModelSchemaEditor(self)
+
+    @property
+    def old_table_name(self):
+        return self._old_table_name
+
+    def save(self, **kwargs):
+        change_type = self._get_change_type()
+        super().save(**kwargs)
+        self._apply_schema_change(change_type)
+
+    def _get_change_type(self):
+        if self.id is None:
+            return 'create'
+        elif self._name_changed():
+            return 'modify'
+
+    def _name_changed(self):
+        return self.old_table_name != self.table_name
+
+    def _apply_schema_change(self, change_type):
+        with self.schema_editor as editor:
+            self._execute_schema_change(change_type, editor)
+
+    def _execute_schema_change(self, change_type, editor):
+        # TODO: Change type enum
+        if change_type == 'create':
+            editor.create_table()
+        elif change_type == 'modify':
+            editor.alter_table()
+
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
 
         Field options are passed as keyword args:
-        `required`   -- sets NULL constraint on the generated field
+        `null`       -- sets NULL constraint on the generated field
         `unique`     -- sets UNIQUE constraint on the generated field
         `max_length` -- sets Django's max_length option on generated CharFields
         """
@@ -92,11 +131,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         self._get_field(field).delete()
 
     def update_field(self, field, **options):
-        """Updates the given model field with new options.
-
-        Does not perform an UPDATE query so the schema changing signal is
-        properly triggered. Raise DoesNotExist if the field is not found.
-        """
+        """Updates the given model field with new options."""
         old_field = self._get_field(field)
         updated_field = self._set_field_options(old_field, options)
         updated_field.save()
@@ -201,10 +236,8 @@ class AbstractFieldSchema(models.Model):
         """Returns an unassociated Django Field instance."""
         return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
-    @classmethod
-    def _data_types_keys(cls):
-        for data_type in cls.DATA_TYPES:
-            yield data_type[0]
+    def get_from_model(self, model):
+        return model._meta.get_field(self.column_name)
 
 
 # Export default data types from the class
@@ -242,7 +275,10 @@ class DynamicModelField(models.Model):
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
-    tracker = FieldTracker(fields=['required', 'unique', 'max_length'])
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._old_field = self.as_field()
 
     class Meta:
         unique_together = (
@@ -256,17 +292,19 @@ class DynamicModelField(models.Model):
     def column_name(self):
         return self.field.column_name
 
+    @property
+    def schema_editor(self):
+        return self.model.schema_editor
+
+    @property
+    def old_field(self):
+        return self._old_field
+
     def as_field(self):
         """Return the Django model field instance with configured constraints."""
         options = {'null': not self.null, 'unique': self.unique}
         self._add_max_length_option(options)
         return self.field.as_field(**options)
-
-    def save(self, **kwargs): # pylint: disable=arguments-differ
-        self._check_null_is_valid()
-        if self._schema_updated():
-            self.model.save()
-        super().save(**kwargs)
 
     def _add_max_length_option(self, options):
         if self._requires_max_length():
@@ -276,9 +314,31 @@ class DynamicModelField(models.Model):
     def _requires_max_length(self):
         return self.field.constructor is models.CharField
 
-    def _check_null_is_valid(self):
-        if self.tracker.previous('null') is True and not self.null:
-            raise exceptions.NullFieldChangedError(self.column_name)
+    def save(self, **kwargs): # pylint: disable=arguments-differ
+        self._check_null_is_valid()
+        change_type = self._check_change_type()
+        super().save(**kwargs)
+        self._apply_schema_change(change_type)
 
-    def _schema_updated(self):
-        return not self.id or self.tracker.changed()
+    def _check_change_type(self):
+        # TODO: change types enum, create, modify, none
+        if self.id is None:
+            return 'create'
+        elif self._is_modified():
+            return 'modify'
+            
+    def _apply_schema_change(self, change_type):
+        self.model.save()
+        if change_type == 'create':
+            self.schema_editor.add_field(self)
+        elif change_type == 'modify':
+            self.schema_editor.alter_field(self)
+
+    def _is_modified(self):
+        return self.old_field != self.as_field()
+
+    def _check_null_is_valid(self):
+        if self.old_field.null and not self.null:
+            raise exceptions.NullFieldChangedError(
+                "{} cannot be changed to NOT NULL".format(self.column_name)
+            )
