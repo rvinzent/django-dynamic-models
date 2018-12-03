@@ -7,6 +7,8 @@ are perfectly usable without adding any additional fields.
 `AbstractFieldSchema` -- base model for defining fields to use on dynamic models
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
+from functools import partial
+
 from django.db import models
 from django.apps import apps
 from django.utils import timezone
@@ -17,6 +19,7 @@ from model_utils import Choices, FieldTracker
 
 from . import utils
 from . import signals
+from . import schema
 from . import exceptions
 
 
@@ -68,11 +71,17 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
             model_id=self.id
         )
 
+    def save(self, **kwargs):
+        created = self.pk is None
+        super().save(**kwargs)
+        if created:
+            schema.create_table(self.as_model())
+
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
 
         Field options are passed as keyword args:
-        `required`   -- sets NULL constraint on the generated field
+        `null`       -- sets NULL constraint on the generated field
         `unique`     -- sets UNIQUE constraint on the generated field
         `max_length` -- sets Django's max_length option on generated CharFields
         """
@@ -226,10 +235,8 @@ class AbstractFieldSchema(models.Model):
         """Returns an unassociated Django Field instance."""
         return self.constructor(db_column=self.column_name, **options) # pylint: disable=not-callable
 
-    @classmethod
-    def _data_types_keys(cls):
-        for data_type in cls.DATA_TYPES:
-            yield data_type[0]
+    def get_from_model(self, model):
+        return model._meta.get_field(self.column_name)
 
 
 # Export default data types from the class
@@ -287,23 +294,63 @@ class DynamicModelField(models.Model):
         self._add_max_length_option(options)
         return self.field.as_field(**options)
 
-    def save(self, **kwargs): # pylint: disable=arguments-differ
-        self._check_null_is_valid()
-        if self._schema_updated():
-            self.model.save()
-        super().save(**kwargs)
-
     def _add_max_length_option(self, options):
         if self._requires_max_length():
             options['max_length'] = self.max_length or utils.default_max_length()
         return options
 
-    def _requires_max_length(self):
-        return self.field.constructor is models.CharField
+    def save(self, **kwargs): # pylint: disable=arguments-differ
+        change_type = self._check_change_type()
+        self._prepare_save(change_type)
+        schema_changer = self._get_schema_changer(change_type)
+        super().save(**kwargs)
+        self._apply_schema_change(schema_changer)
+
+    def _check_change_type(self):
+        # TODO: change types enum, create, modify, none
+        if self.id is None:
+            return 'create'
+        elif self._changed_fields_require_schema_update():
+            return 'modify'
+
+    def _get_schema_changer(self, change_type):
+        if change_type == 'create':
+            return schema.add_field
+        elif change_type == 'modify':
+            _, old_field = self._get_model_with_field()
+            return partial(schema.alter_field, old_field=old_field)
+    
+    def _prepare_save(self, is_schema_changing):
+        self._check_null_is_valid()
+        if is_schema_changing:
+            self._udpate_model_schema_timestamp()
 
     def _check_null_is_valid(self):
         if self.tracker.previous('null') is True and not self.null:
-            raise exceptions.NullFieldChangedError(self.column_name)
+            raise exceptions.NullFieldChangedError(
+                "{} cannot be changed to NOT NULL".format(self.column_name)
+            )
 
-    def _schema_updated(self):
-        return not self.id or self.tracker.changed()
+    def _apply_schema_change(self, schema_changer):
+        if schema_changer:
+            new_model, new_field = self._get_model_with_field()
+            schema_changer(model=new_model, new_field=new_field)
+
+    def _get_model_with_field(self):
+        model = self.model.as_model()
+        return (model, self.field.get_from_model(model))
+
+    def _udpate_model_schema_timestamp(self):
+        self.model.save()
+
+    def _changed_fields_require_schema_update(self):
+        changed_fields = self.tracker.changed().keys()
+        return set(changed_fields).issubset(self._get_fields_to_check())
+
+    def _get_fields_to_check(self):
+        if self._requires_max_length():
+            return ('null', 'unique', 'max_length')
+        return ('null', 'unique')
+
+    def _requires_max_length(self):
+        return self.field.constructor is models.CharField

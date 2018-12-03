@@ -17,10 +17,10 @@ def alter_table_name(model, old_name, new_name):
     with connection.schema_editor() as editor:
         editor.alter_db_table(model, old_name, new_name)
 
-def add_field(model, field):
+def add_field(model, new_field):
     """Add a field to the model's database table."""
     with connection.schema_editor() as editor:
-        editor.add_field(model, field)
+        editor.add_field(model, new_field)
 
 def remove_field(model, field):
     """Remove a field from the model's database table."""
