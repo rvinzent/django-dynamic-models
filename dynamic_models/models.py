@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
-from model_utils import Choices, FieldTracker
+from model_utils import Choices
 
 from . import utils
 from . import signals
@@ -32,7 +32,6 @@ class ModelSchemaBase(models.base.ModelBase):
         return model
 
 
-# TODO: support table name changes
 class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """Base model for the dynamic model schema table.
 
@@ -45,6 +44,10 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     class Meta:
         abstract = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._old_table_name = self.table_name
 
     @property
     def app_label(self):
@@ -71,11 +74,38 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
             model_id=self.id
         )
 
+    @property
+    def schema_editor(self):
+        return schema.ModelSchemaEditor(self)
+
+    @property
+    def old_table_name(self):
+        return self._old_table_name
+
     def save(self, **kwargs):
-        created = self.pk is None
+        change_type = self._get_change_type()
         super().save(**kwargs)
-        if created:
-            schema.create_table(self.as_model())
+        self._apply_schema_change(change_type)
+
+    def _get_change_type(self):
+        if self.id is None:
+            return 'create'
+        elif self._name_changed():
+            return 'modify'
+
+    def _name_changed(self):
+        return self.old_table_name != self.table_name
+
+    def _apply_schema_change(self, change_type):
+        with self.schema_editor as editor:
+            self._execute_schema_change(change_type, editor)
+
+    def _execute_schema_change(self, change_type, editor):
+        # TODO: Change type enum
+        if change_type == 'create':
+            editor.create_table()
+        elif change_type == 'modify':
+            editor.alter_table()
 
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
@@ -96,11 +126,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         self._get_field(field).delete()
 
     def update_field(self, field, **options):
-        """Updates the given model field with new options.
-
-        Does not perform an UPDATE query so the schema changing signal is
-        properly triggered. Raise DoesNotExist if the field is not found.
-        """
+        """Updates the given model field with new options."""
         old_field = self._get_field(field)
         updated_field = self._set_field_options(old_field, options)
         updated_field.save()
@@ -274,7 +300,10 @@ class DynamicModelField(models.Model):
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
-    tracker = FieldTracker(fields=['required', 'unique', 'max_length'])
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._old_field = self.as_field()
 
     class Meta:
         unique_together = (
@@ -288,6 +317,14 @@ class DynamicModelField(models.Model):
     def column_name(self):
         return self.field.column_name
 
+    @property
+    def schema_editor(self):
+        return self.model.schema_editor
+
+    @property
+    def old_field(self):
+        return self._old_field
+
     def as_field(self):
         """Return the Django model field instance with configured constraints."""
         options = {'null': not self.null, 'unique': self.unique}
@@ -299,58 +336,34 @@ class DynamicModelField(models.Model):
             options['max_length'] = self.max_length or utils.default_max_length()
         return options
 
+    def _requires_max_length(self):
+        return self.field.constructor is models.CharField
+
     def save(self, **kwargs): # pylint: disable=arguments-differ
+        self._check_null_is_valid()
         change_type = self._check_change_type()
-        self._prepare_save(change_type)
-        schema_changer = self._get_schema_changer(change_type)
         super().save(**kwargs)
-        self._apply_schema_change(schema_changer)
+        self._apply_schema_change(change_type)
 
     def _check_change_type(self):
         # TODO: change types enum, create, modify, none
         if self.id is None:
             return 'create'
-        elif self._changed_fields_require_schema_update():
+        elif self._is_modified():
             return 'modify'
-
-    def _get_schema_changer(self, change_type):
+            
+    def _apply_schema_change(self, change_type):
+        self.model.save()
         if change_type == 'create':
-            return schema.add_field
+            self.schema_editor.add_field(self)
         elif change_type == 'modify':
-            _, old_field = self._get_model_with_field()
-            return partial(schema.alter_field, old_field=old_field)
-    
-    def _prepare_save(self, is_schema_changing):
-        self._check_null_is_valid()
-        if is_schema_changing:
-            self._udpate_model_schema_timestamp()
+            self.schema_editor.alter_field(self)
+
+    def _is_modified(self):
+        return self.old_field != self.as_field()
 
     def _check_null_is_valid(self):
-        if self.tracker.previous('null') is True and not self.null:
+        if self.old_field.null and not self.null:
             raise exceptions.NullFieldChangedError(
                 "{} cannot be changed to NOT NULL".format(self.column_name)
             )
-
-    def _apply_schema_change(self, schema_changer):
-        if schema_changer:
-            new_model, new_field = self._get_model_with_field()
-            schema_changer(model=new_model, new_field=new_field)
-
-    def _get_model_with_field(self):
-        model = self.model.as_model()
-        return (model, self.field.get_from_model(model))
-
-    def _udpate_model_schema_timestamp(self):
-        self.model.save()
-
-    def _changed_fields_require_schema_update(self):
-        changed_fields = self.tracker.changed().keys()
-        return set(changed_fields).issubset(self._get_fields_to_check())
-
-    def _get_fields_to_check(self):
-        if self._requires_max_length():
-            return ('null', 'unique', 'max_length')
-        return ('null', 'unique')
-
-    def _requires_max_length(self):
-        return self.field.constructor is models.CharField
