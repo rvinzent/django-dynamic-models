@@ -9,7 +9,7 @@ are perfectly usable without adding any additional fields.
 """
 from django.db import models
 from django.apps import apps
-from django.utils import timezone
+from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -18,6 +18,7 @@ from model_utils import Choices, FieldTracker
 from . import utils
 from . import signals
 from . import exceptions
+from . import factory
 
 
 # TODO: Move this to __init_subclass__
@@ -55,6 +56,10 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     def table_name(self):
         parts = [self.app_label, self.__class__.__name__, slugify(self.name)]
         return '_'.join(parts).replace('-', '_')
+
+    @cached_property
+    def factory(self):
+        return factory.ModelFactory(self)
 
     @property
     def model_fields(self):
@@ -114,13 +119,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         try:
             return self._try_cached_model()
         except exceptions.ModelDoesNotExistError:
-            pass
-        model = self._build_model()
-        signals.connect_dynamic_model(model)
-        return model
-
-    def _build_model(self):
-        return type(self.model_name, (models.Model,), self._model_attributes())
+            return self.factory.build()
 
     def _try_cached_model(self):
         try:
@@ -148,35 +147,11 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     def _has_current_schema(self, model):
         return model._declared >= self.modified # pylint: disable=protected-access
 
-    def _model_attributes(self):
-        return {
-            **self._base_fields(),
-            **utils.default_fields(),
-            **self._custom_fields()
-        }
-
-    def _base_fields(self):
-        return {
-            '__module__': '{}.models'.format(self.app_label),
-            '_declared': timezone.now(),
-            '_schema': self,
-            'Meta': self._model_meta(),
-        }
-
-    def _custom_fields(self):
-        return {f.column_name: f.as_field() for f in self.model_fields}
-
-    def _model_meta(self):
-        class Meta:
-            app_label = self.app_label
-            db_table = self.table_name
-            verbose_name = self.name
-        return Meta
 
 
 class AbstractFieldSchema(models.Model):
     """Base model for dynamic field definitions.
-    
+
     Data type choices are stored in the DATA_TYPES class attribute. DATA_TYPES
     should be a valid `choices` object. Each data type should have a key set in
     FIELD_TYPES mapping to the constructor of a Django `Field` class.

@@ -1,10 +1,4 @@
-"""Various utility functions for the dynamic_models app.
-
-`default_fields`     -- return DEFAULT_FIELDS setting
-`get_cached_model`   -- return model from app registry
-`unregister model`   -- remove model from app registry
-`has_current_schema` -- check if model's schema is updated
-"""
+"""Various utility functions for the dynamic_models app."""
 from django.conf import settings
 from django.apps import apps
 from . import exceptions
@@ -23,6 +17,7 @@ def _settings():
     return getattr(settings, 'DYNAMIC_MODELS', {})
 
 def get_model(app_label, model_name):
+    """Get a model from Django's app registry."""
     try:
         return apps.get_model(app_label, model_name)
     except LookupError as err:
