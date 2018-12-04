@@ -7,10 +7,7 @@ are perfectly usable without adding any additional fields.
 `AbstractFieldSchema` -- base model for defining fields to use on dynamic models
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
-from functools import partial
-
 from django.db import models
-from django.apps import apps
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
@@ -18,22 +15,12 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from model_utils import Choices
 
 from . import utils
-from . import signals
-from . import schema
 from . import exceptions
-from . import factory
+from .schema import ModelSchemaEditor
+from .factory import ModelFactory
 
 
-# TODO: Move this to __init_subclass__
-class ModelSchemaBase(models.base.ModelBase):
-    def __new__(cls, name, bases, attrs, **kwargs):
-        model = super().__new__(cls, name, bases, attrs, **kwargs)
-        if not model._meta.abstract:
-            signals.connect_model_schema_handlers(model)
-        return model
-
-
-class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
+class AbstractModelSchema(models.Model ):
     """Base model for the dynamic model schema table.
 
     Fields:
@@ -45,10 +32,6 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     class Meta:
         abstract = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._old_table_name = self.table_name
 
     @property
     def app_label(self):
@@ -65,7 +48,11 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     @cached_property
     def factory(self):
-        return factory.ModelFactory(self)
+        return ModelFactory(self)
+
+    @property
+    def schema_editor(self):
+        return ModelSchemaEditor(self)
 
     @property
     def model_fields(self):
@@ -79,38 +66,21 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
             model_id=self.id
         )
 
-    @property
-    def schema_editor(self):
-        return schema.ModelSchemaEditor(self)
-
-    @property
-    def old_table_name(self):
-        return self._old_table_name
-
-    def save(self, **kwargs):
-        change_type = self._get_change_type()
+    def save(self, **kwargs): # pylint: disable=arguments-differ
+        created = not self.id
         super().save(**kwargs)
-        self._apply_schema_change(change_type)
+        if created:
+            self._create_table_schema()
 
-    def _get_change_type(self):
-        if self.id is None:
-            return 'create'
-        elif self._name_changed():
-            return 'modify'
+    def _create_table_schema(self):
+        self.schema_editor.create_table()
 
-    def _name_changed(self):
-        return self.old_table_name != self.table_name
+    def as_model(self):
+        """Return a dynamic model represeted by this schema instance."""
+        return self.factory.get()
 
-    def _apply_schema_change(self, change_type):
-        with self.schema_editor as editor:
-            self._execute_schema_change(change_type, editor)
-
-    def _execute_schema_change(self, change_type, editor):
-        # TODO: Change type enum
-        if change_type == 'create':
-            editor.create_table()
-        elif change_type == 'modify':
-            editor.alter_table()
+    def has_current_schema(self, model):
+        return self.factory.has_current_schema(model)
 
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
@@ -120,21 +90,29 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         `unique`     -- sets UNIQUE constraint on the generated field
         `max_length` -- sets Django's max_length option on generated CharFields
         """
-        return DynamicModelField.objects.create(
+        field = DynamicModelField.objects.create(
             model=self,
             field=field,
             **options
         )
+        self.save()
+        self.schema_editor.add_field(field)
+        return field
 
     def remove_field(self, field):
         """Remove a field from this model schema."""
-        self._get_field(field).delete()
+        to_delete = self._get_field(field)
+        self.save()
+        self.schema_editor.remove_field(to_delete)
+        to_delete.delete()
 
     def update_field(self, field, **options):
         """Updates the given model field with new options."""
-        old_field = self._get_field(field)
-        updated_field = self._set_field_options(old_field, options)
+        field = self._get_field(field)
+        updated_field = self._set_field_options(field, options)
         updated_field.save()
+        self.save()
+        self.schema_editor.alter_field(field)
         return updated_field
 
     def _get_field(self, field):
@@ -148,40 +126,6 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         for option, value in options.items():
             setattr(field, option, value)
         return field
-
-    def as_model(self):
-        """Return a dynamic model represeted by this schema instance."""
-        try:
-            return self._try_cached_model()
-        except exceptions.ModelDoesNotExistError:
-            return self.factory.build()
-
-    def _try_cached_model(self):
-        try:
-            return self._cached_model()
-        except exceptions.OutdatedModelError:
-            self._unregister_model()
-
-    def _cached_model(self):
-        model = utils.get_model(self.app_label, self.model_name)
-        self._check_model_is_current(model)
-        return model
-
-    def _unregister_model(self):
-        try:
-            del apps.all_models[self.app_label][self.model_name]
-        except KeyError as err:
-            raise exceptions.ModelDoesNotExistError() from err
-        else:
-            signals.disconnect_dynamic_model(self.model_name)
-
-    def _check_model_is_current(self, model):
-        if not self._has_current_schema(model):
-            raise exceptions.OutdatedModelError()
-
-    def _has_current_schema(self, model):
-        return model._declared >= self.modified # pylint: disable=protected-access
-
 
 
 class AbstractFieldSchema(models.Model):
@@ -248,8 +192,7 @@ class DynamicModelField(models.Model):
     """Through table for model schema objects to field schema objects.
 
     This model should only be interacted with by the interface provided in the
-    AbstractModelSchema base class. It is responsible for generating model
-    fields with customized constraints.
+    AbstractModelSchema base class to allow for proper schema changes.
     """
     model_content_type = models.ForeignKey(
         ContentType,
@@ -275,10 +218,9 @@ class DynamicModelField(models.Model):
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._old_field = self.as_field()
+        self._initial_null = self.null
 
     class Meta:
         unique_together = (
@@ -292,13 +234,15 @@ class DynamicModelField(models.Model):
     def column_name(self):
         return self.field.column_name
 
-    @property
-    def schema_editor(self):
-        return self.model.schema_editor
+    def save(self, **kwargs): # pylint: disable=arguments-differ
+        self._check_null_is_valid()
+        super().save(**kwargs)
 
-    @property
-    def old_field(self):
-        return self._old_field
+    def _check_null_is_valid(self):
+        if self._initial_null and not self.null:
+            raise exceptions.NullFieldChangedError(
+                "{} cannot be changed to NOT NULL".format(self.column_name)
+            )
 
     def as_field(self):
         """Return the Django model field instance with configured constraints."""
@@ -313,32 +257,3 @@ class DynamicModelField(models.Model):
 
     def _requires_max_length(self):
         return self.field.constructor is models.CharField
-
-    def save(self, **kwargs): # pylint: disable=arguments-differ
-        self._check_null_is_valid()
-        change_type = self._check_change_type()
-        super().save(**kwargs)
-        self._apply_schema_change(change_type)
-
-    def _check_change_type(self):
-        # TODO: change types enum, create, modify, none
-        if self.id is None:
-            return 'create'
-        elif self._is_modified():
-            return 'modify'
-            
-    def _apply_schema_change(self, change_type):
-        self.model.save()
-        if change_type == 'create':
-            self.schema_editor.add_field(self)
-        elif change_type == 'modify':
-            self.schema_editor.alter_field(self)
-
-    def _is_modified(self):
-        return self.old_field != self.as_field()
-
-    def _check_null_is_valid(self):
-        if self.old_field.null and not self.null:
-            raise exceptions.NullFieldChangedError(
-                "{} cannot be changed to NOT NULL".format(self.column_name)
-            )

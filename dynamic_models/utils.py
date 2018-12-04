@@ -16,9 +16,9 @@ def default_max_length():
 def _settings():
     return getattr(settings, 'DYNAMIC_MODELS', {})
 
-def get_model(app_label, model_name):
+def get_registered_model(model_schema):
     """Get a model from Django's app registry."""
     try:
-        return apps.get_model(app_label, model_name)
+        return apps.get_model(model_schema.app_label, model_schema.model_name)
     except LookupError as err:
         raise exceptions.ModelDoesNotExistError() from err

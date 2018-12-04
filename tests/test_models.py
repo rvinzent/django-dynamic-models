@@ -1,6 +1,5 @@
 import pytest
 from django.db import connection, models
-from dynamic_models import signals as dm_signals
 from dynamic_models.models import AbstractFieldSchema, DefaultDataTypes
 
 from dynamic_models import exceptions
@@ -9,12 +8,13 @@ from .conftest import (
     db_table_exists, db_table_has_field, db_field_allows_null, is_registered
 )
 
+# pylint: disable=unused-argument,redefined-outer-name
 
 
 @pytest.fixture
 def model_schema(request, db):
     """Creates and yields an instance of the model schema.
-    
+
     A database table should be created when it is loaded and cleaned up after
     the test.
     """
@@ -25,7 +25,7 @@ def model_schema(request, db):
 @pytest.fixture
 def model_schema_no_delete(db):
     """Creates a model schema instance that must be manually cleaned up.
-    
+
     Use this fixture to test for correct deletion behavior.
     """
     return ModelSchema.objects.create(name='simple model')
@@ -33,7 +33,7 @@ def model_schema_no_delete(db):
 @pytest.fixture
 def int_field_schema(db):
     """Creates an integer field schema instance.
-    
+
     Fixture does not add a column to any table until it is added to a model
     schema instance with the `model_schema.add_field` method.
     """
@@ -45,7 +45,7 @@ def int_field_schema(db):
 @pytest.fixture
 def char_field_schema(db):
     """Creates field schema instance with the character data type.
-    
+
     Fixture does not add a column to any table until it is added to a model
     schema instance with the `model_schema.add_field` method.
     """
@@ -109,44 +109,36 @@ def test_removing_field_schema_removes_db_fields(model_schema, int_field_schema)
     )
 
 def test_updating_field_updates_db_schema(model_schema, int_field_schema):
-    model_schema.add_field(int_field_schema, null=True)
+    model_schema.add_field(int_field_schema, null=False)
     assert not db_field_allows_null(
         model_schema.table_name,
         int_field_schema.column_name
     )
-    model_schema.update_field(int_field_schema, null=False)
+    model_schema.update_field(int_field_schema, null=True)
     assert db_field_allows_null(
         model_schema.table_name,
         int_field_schema.column_name
     )
 
 def test_char_field_has_settings_default_max_length(settings, model_schema, char_field_schema):
-    settings.configure('DYNAMIC_MODELS', {'DEFAULT_CHARFIELD_MAX_LENGTH': 64})
-    field = model_schema.add_field(char_field_schema)
-    assert field.max_length == 64
+    settings.DYNAMIC_MODELS = {'DEFAULT_MAX_LENGTH': 64}
+    field_schema = model_schema.add_field(char_field_schema)
+    assert field_schema.as_field().max_length == 64
 
 def test_char_field_max_length_defaults_to_255(model_schema, char_field_schema):
-    field = model_schema.add_field(char_field_schema)
-    assert field.max_length == 255
+    field_schema = model_schema.add_field(char_field_schema)
+    assert field_schema.as_field().max_length == 255
 
 def test_non_char_fields_do_not_have_max_length(model_schema, int_field_schema):
     field = model_schema.add_field(int_field_schema)
     assert field.max_length is None
-    
+
 def test_cannot_change_null_to_not_null(model_schema, int_field_schema):
-    null_field = model_schema.add_field(int_field_schema, null=False)
+    null_field = model_schema.add_field(int_field_schema, null=True)
     with pytest.raises(exceptions.NullFieldChangedError,
             match=int_field_schema.column_name):
-        null_field.null = True
+        null_field.null = False
         null_field.save()
-
-def test_schema_timestamp_updated_on_field_change(model_schema, int_field_schema):
-    field = model_schema.add_field(int_field_schema, null=True)
-    initial_time = model_schema.modified
-    field.null = False
-    field.save()
-    model_schema.refresh_from_db()
-    assert model_schema.modified > initial_time 
 
 def test_crud_dynamic_models_instances(model_schema, int_field_schema):
     """Dynamic models should be able to create, update, and destroy instances."""
