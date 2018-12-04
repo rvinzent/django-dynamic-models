@@ -1,6 +1,7 @@
 from django.db import models
 from django.apps import apps
 from django.utils import timezone
+from django.core.cache import cache
 
 from . import utils
 from .exceptions import OutdatedModelError, ModelDoesNotExistError
@@ -9,24 +10,16 @@ from .exceptions import OutdatedModelError, ModelDoesNotExistError
 class ModelFactory:
     def __init__(self, model_schema):
         self.schema = model_schema
-        self.model = None
 
-    def get(self):
-        if self.model and self.has_current_schema(self.model):
-            return self.model
-
-        model, is_current = self._get_and_check_registered_model()
-        if is_current:
-            self.model = model
-            return self.model
-
-        return self.regenerate()
+    def get_model(self):
+        if self._is_registered():
+            return utils.get_registered_model(self.schema)
+        return self.build()
 
     def regenerate(self):
         if self._is_registered():
             self.destroy()
-        self.model = self.build()
-        return self.model
+        return self.build()
 
     def build(self):
         model = type(
@@ -42,25 +35,14 @@ class ModelFactory:
         self._unregister_model()
         self.model = None
 
-    def has_current_schema(self, model):
-        # TODO: cache last_modified values instead
-        self.schema.refresh_from_db()
-        return model._declared >= self.schema.modified
-
     def _is_registered(self):
-        return self.schema.model_name in apps.all_models[self.schema.app_label]
-
-    def _get_and_check_registered_model(self):
-        try:
-            model = utils.get_registered_model(self.schema)
-        except ModelDoesNotExistError:
-            return None, False
-        return (model, self.has_current_schema(model))
+        model_key = self.schema.model_name.lower()
+        return model_key in apps.all_models[self.schema.app_label]
 
     def _unregister_model(self):
-        del apps.all_models[self.schema.app_label][self.schema.model_name]
+        app_registry = apps.all_models[self.schema.app_label]
+        del app_registry[self.schema.model_name.lower()]
         apps.clear_cache()
-
 
     def _get_signal_uid(self):
         return '{}_model_schema'.format(self.schema.model_name)
@@ -110,7 +92,7 @@ class ModelFactory:
         Called on pre_save to guard against the possibility of a model schema change
         between instance instantiation and record save.
         """
-        # TODO: cache the last modified time instead to avoid query on each save
-        sender._schema.refresh_from_db()
-        if not sender._declared >= sender._schema.modified:
-            raise OutdatedModelError("model {} has changed".format(sender.__name__))
+        if not sender._schema.is_current(sender):
+            raise OutdatedModelError(
+                "model {} has changed".format(sender.__name__)
+            )

@@ -4,6 +4,7 @@ from django.apps import apps
 from . import exceptions
 
 DEFAULT_MAX_LENGTH = 255
+DEFAULT_CACHE_KEY_PREFIX = 'dynamic_models_schema_'
 
 def default_fields():
     """Returns the DEFAULT_FIELDS setting."""
@@ -12,6 +13,9 @@ def default_fields():
 def default_max_length():
     """Returns the default max_length value from the settings or 255."""
     return _settings().get('DEFAULT_MAX_LENGTH', DEFAULT_MAX_LENGTH)
+
+def cache_key_prefix():
+    return _settings().get('CACHE_KEY_PREFIX', DEFAULT_CACHE_KEY_PREFIX)
 
 def _settings():
     return getattr(settings, 'DYNAMIC_MODELS', {})

@@ -8,6 +8,7 @@ are perfectly usable without adding any additional fields.
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
 from django.db import models
+from django.dispatch import receiver
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
@@ -16,11 +17,23 @@ from model_utils import Choices
 
 from . import utils
 from . import exceptions
-from .schema import ModelSchemaEditor
+from .schema import ModelSchemaEditor, ModelSchemaCacher
 from .factory import ModelFactory
 
 
-class AbstractModelSchema(models.Model ):
+class ModelSchemaBase(models.base.ModelBase):
+    def __new__(cls, name, bases, attrs, **kwargs):
+        model = super().__new__(cls, name, bases, attrs, **kwargs)
+        if not model._meta.abstract and issubclass(model, AbstractModelSchema):
+            models.signals.pre_delete.connect(drop_model_table, sender=model)
+        return model
+
+def drop_model_table(sender, instance, **kwargs):
+    instance.schema_editor.delete_table()
+    instance.factory.destroy()
+
+
+class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """Base model for the dynamic model schema table.
 
     Fields:
@@ -29,6 +42,8 @@ class AbstractModelSchema(models.Model ):
     """
     name = models.CharField(max_length=32, unique=True, editable=False)
     modified = models.DateTimeField(auto_now=True)
+
+    _cacher = ModelSchemaCacher()
 
     class Meta:
         abstract = True
@@ -44,13 +59,13 @@ class AbstractModelSchema(models.Model ):
     @property
     def table_name(self):
         parts = [self.app_label, self.__class__.__name__, slugify(self.name)]
-        return '_'.join(parts).replace('-', '_')
+        return '_'.join(parts).replace('-', '_').lower()
 
     @cached_property
     def factory(self):
         return ModelFactory(self)
 
-    @property
+    @cached_property
     def schema_editor(self):
         return ModelSchemaEditor(self)
 
@@ -66,21 +81,19 @@ class AbstractModelSchema(models.Model ):
             model_id=self.id
         )
 
-    def save(self, **kwargs): # pylint: disable=arguments-differ
-        created = not self.id
+    def save(self, **kwargs):
         super().save(**kwargs)
-        if created:
-            self._create_table_schema()
-
-    def _create_table_schema(self):
-        self.schema_editor.create_table()
+        self._cacher.set_last_modified(self)
+        self.schema_editor.update_table()
 
     def as_model(self):
         """Return a dynamic model represeted by this schema instance."""
-        return self.factory.get()
+        cached = self.factory.get_model()
+        return cached if self.is_current(cached) else self.factory.build()
 
-    def has_current_schema(self, model):
-        return self.factory.has_current_schema(model)
+    def is_current(self, model):
+        """Checks if a model has the most up to date schema."""
+        return model and model._declared >= self._cacher.get_last_modified(self)
 
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
@@ -96,23 +109,22 @@ class AbstractModelSchema(models.Model ):
             **options
         )
         self.save()
-        self.schema_editor.add_field(field)
+        self.schema_editor.update_field(field)
         return field
 
     def remove_field(self, field):
         """Remove a field from this model schema."""
         to_delete = self._get_field(field)
-        self.save()
-        self.schema_editor.remove_field(to_delete)
+        self.schema_editor.delete_field(to_delete)
         to_delete.delete()
+        self.save()
 
     def update_field(self, field, **options):
         """Updates the given model field with new options."""
         field = self._get_field(field)
         updated_field = self._set_field_options(field, options)
-        updated_field.save()
+        self.schema_editor.update_field(field)
         self.save()
-        self.schema_editor.alter_field(field)
         return updated_field
 
     def _get_field(self, field):
@@ -246,9 +258,13 @@ class DynamicModelField(models.Model):
 
     def as_field(self):
         """Return the Django model field instance with configured constraints."""
-        options = {'null': not self.null, 'unique': self.unique}
+        options = {'null': self.null, 'unique': self.unique}
         self._add_max_length_option(options)
         return self.field.as_field(**options)
+
+    def as_model_field(self):
+        """Return the field as it exists on the dynamic model."""
+        return self.model.as_model()._meta.get_field(self.column_name)
 
     def _add_max_length_option(self, options):
         if self._requires_max_length():
