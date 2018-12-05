@@ -17,7 +17,7 @@ from model_utils import Choices
 
 from . import utils
 from . import exceptions
-from .schema import ModelSchemaEditor, ModelSchemaCacher
+from .schema import ModelSchemaEditor, FieldSchemaEditor, ModelSchemaCacher
 from .factory import ModelFactory
 
 
@@ -246,6 +246,10 @@ class DynamicModelField(models.Model):
     def column_name(self):
         return self.field.column_name
 
+    @cached_property
+    def schema_editor(self):
+        return FieldSchemaEditor(self.model, self.field)
+
     def save(self, **kwargs): # pylint: disable=arguments-differ
         self._check_null_is_valid()
         super().save(**kwargs)
@@ -262,14 +266,16 @@ class DynamicModelField(models.Model):
         self._add_max_length_option(options)
         return self.field.as_field(**options)
 
-    def as_model_field(self):
-        """Return the field as it exists on the dynamic model."""
-        return self.model.as_model()._meta.get_field(self.column_name)
-
     def _add_max_length_option(self, options):
         if self._requires_max_length():
-            options['max_length'] = self.max_length or utils.default_max_length()
+            self._ensure_max_length()
+            options['max_length'] = self.max_length
         return options
 
+    def _ensure_max_length(self):
+        if not self.max_length:
+            self.max_length = utils.default_max_length()
+
     def _requires_max_length(self):
-        return self.field.constructor is models.CharField
+        field_kwargs = self.as_field().deconstruct[2]
+        return 'max_length' in field_kwargs

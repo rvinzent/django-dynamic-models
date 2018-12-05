@@ -16,80 +16,126 @@ class ModelSchemaCacher:
     def delete(self, schema):
         return cache.delete(self._make_cache_key(schema))
 
-    @classmethod 
+    @classmethod
     def _make_cache_key(cls, schema):
         return '_'.join([cls.key_prefix, schema.model_name])
 
 
-class ModelSchemaEditor:
-    def __init__(self, model_schema):
-        self.schema = model_schema
-        self._editor = connection.schema_editor
-        self._set_initial_state()
+class BaseSchemaEditor:
+    def __init__(self, schema):
+        self.schema = schema
+        self.editor = connection.schema_editor
+        self.initial_name = self.get_name()
 
-    def _set_initial_state(self):
-        self._is_new_model = self.schema.id is None
-        self._initial_table_name = self.schema.table_name
-        self._set_intial_fields()
+    def get_model(self):
+        return self.schema.as_model()
 
-    def _set_intial_fields(self):
-        if not self._is_new_model:
-            self._initial_fields = self.schema.as_model()._meta.get_fields()
-        else:
-            self._initial_fields = {}
+    def get_name(self):
+        raise NotImplementedError()
 
-    def update_table(self):
-        """Sync the table schema to the database."""
-        if self._is_new_model:
-            self._create_table()
-        elif self.schema.table_name != self._initial_table_name:
-            self._alter_table()
-        self._set_initial_state()
+    def exists(self):
+        raise NotImplementedError()
 
-    def delete_table(self):
+    def update(self):
+        """Either update or create the database schema."""
+        if not self.exists():
+            self.create()
+        elif self.is_changed():
+            self.alter()
+            self.sync()
+
+    def create(self):
+        raise NotImplementedError()
+
+    def alter(self):
+        raise NotImplementedError()
+
+    def drop(self):
+        raise NotImplementedError()
+
+    def sync(self):
+        self.initial_name = self.get_name()
+
+    def is_changed(self):
+        return self.initial_name != self.get_name()
+
+
+class ModelSchemaEditor(BaseSchemaEditor):
+    def get_name(self):
+        """Return the name of the table."""
+        return self.schema.table_name
+
+    def exists(self):
+        """Check if the table exists in the database."""
+        return utils.db_table_exists(self.initial_name)
+
+    def create(self):
+        """Create a database table for this model."""
+        with self.editor() as e:
+            e.create_model(self.get_model())
+
+    def alter(self):
+        """Change the model's table_name to the currently set name."""
+        with self.editor() as e:
+            e.alter_db_table(self.get_model(), self.initial_name, self.get_name())
+
+    def drop(self):
         """Delete a database table for the model."""
-        with self._editor() as editor:
-            editor.delete_model(self.schema.as_model())
+        with self.editor() as e:
+            e.delete_model(self.get_model())
 
-    def _create_table(self):
-        with self._editor() as editor:
-            editor.create_model(self.schema.as_model())
 
-    def _alter_table(self):
-        with self._editor() as editor:
-            editor.alter_db_table(
-                self.schema.as_model(),
-                self._initial_table_name,
-                self.schema.table_name
-            )
+class FieldSchemaEditor(BaseSchemaEditor):
+    def __init__(self, model_schema, field_schema):
+        super().__init__(self, model_schema)
+        self.field_schema = field_schema
+        self.initial_field = self.get_model()._meta.get_field(self.initial_name)
 
-    def update_field(self, field):
-        """Update a field on the model with new constraints"""
-        if field.column_name in self._initial_fields:
-            self._alter_field(field)
-        else:
-            self._add_field(field)
+    def get_name(self):
+        """Return the column name of the field."""
+        return self.field_schema.column_name
 
-    def delete_field(self, field):
+    def get_field(self, model=None):
+        """Return the field from the model."""
+        if model is None:
+            model = self.get_model()
+        return model._meta.get_field(self.get_name())
+
+    def get_model_with_field(self):
+        """Return both the model and the field."""
+        model = self.get_model()
+        field = self.get_field(model)
+        return model, field
+
+    def exists(self):
+        """Check if the column exists on the model's database table."""
+        return utils.db_table_has_field(
+            self.schema.table_name,
+            self.initial_name
+        )
+
+    def create(self):
+        """Add a field to this model's database table."""
+        model = self.get_model()
+        with self.editor() as e:
+            e.add_field(model, self.initial_field)
+
+    def drop(self):
         """Remove a field from the model's database table."""
-        with self._editor() as editor:
-            editor.remove_field(*self._model_with_field(field))
-        self._set_initial_state()
+        model, field = self.get_model_with_field()
+        with self.editor() as e:
+            e.remove_field(model, field)
 
-    def _add_field(self, field):
-        with self._editor() as editor:
-            editor.add_field(*self._model_with_field(field))
-        self._set_initial_state()
+    def alter(self):
+        """Alter field schema including constraints on the model's table."""
+        model, new_field = self.get_model_with_field()
+        with self.editor() as e:
+            e.alter_field(model, self.initial_field, new_field)
 
-    def _alter_field(self, field):
-        old_field = self._initial_fields[field.column_name]
-        model, new_field = self._model_with_field(field)
-        with self._editor() as editor:
-            editor.alter_field(model, old_field, new_field)
-        self._set_initial_state()
+    def is_changed(self):
+        """Check if the field schema has changed."""
+        return self.initial_field == self.get_field()
 
-    def _model_with_field(self, field):
-        model = self.schema.as_model()
-        model_field = model._meta.get_field(field.column_name)
-        return model, model_field
-
+    def sync(self):
+        super().sync()
+        self.initial_field = self.get_field()

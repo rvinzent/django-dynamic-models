@@ -1,5 +1,5 @@
 import pytest
-from django.db import connection, models
+from django.db import models
 from dynamic_models.models import AbstractFieldSchema, DefaultDataTypes
 
 from dynamic_models import exceptions
@@ -103,7 +103,7 @@ def test_crud_dynamic_models_instances(model_schema, int_field_schema):
 
     instance = model.objects.create(**{field_name: 1})
     assert instance, "instance not created"
-    
+
     assert model.objects.get(pk=instance.pk), "instance not retrieved"
 
     model.objects.update(**{field_name: 2})
