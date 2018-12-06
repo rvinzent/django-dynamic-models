@@ -11,7 +11,6 @@ def model_schema(request, db):
     A database table should be created when it is loaded and cleaned up after
     the test.
     """
-    breakpoint()
     instance = ModelSchema.objects.create(name='simple model')
     try:
         yield instance

@@ -9,15 +9,15 @@ are perfectly usable without adding any additional fields.
 """
 from django.db import models
 from django.dispatch import receiver
-from django.utils.functional import cached_property
 from django.utils.text import slugify
+from django.utils.functional import cached_property
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from model_utils import Choices
 
 from . import utils
 from . import exceptions
-from .schema import ModelSchemaEditor, FieldSchemaEditor, ModelSchemaCacher
+from .schema import ModelSchemaEditor, FieldSchemaEditor, ModelSchemaChecker
 from .factory import ModelFactory
 
 
@@ -29,7 +29,8 @@ class ModelSchemaBase(models.base.ModelBase):
         return model
 
 def drop_model_table(sender, instance, **kwargs):
-    instance.schema_editor.delete_table()
+    instance.schema_editor.drop()
+    instance.schema_checker.delete()
     instance.factory.destroy()
 
 
@@ -43,10 +44,20 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     name = models.CharField(max_length=32, unique=True, editable=False)
     modified = models.DateTimeField(auto_now=True)
 
-    _cacher = ModelSchemaCacher()
-
     class Meta:
         abstract = True
+
+    @cached_property
+    def factory(self):
+        return ModelFactory(self)
+
+    @cached_property
+    def schema_checker(self):
+        return ModelSchemaChecker(self)
+
+    @cached_property
+    def schema_editor(self):
+        return ModelSchemaEditor(self)
 
     @property
     def app_label(self):
@@ -60,14 +71,6 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     def table_name(self):
         parts = [self.app_label, self.__class__.__name__, slugify(self.name)]
         return '_'.join(parts).replace('-', '_').lower()
-
-    @cached_property
-    def factory(self):
-        return ModelFactory(self)
-
-    @cached_property
-    def schema_editor(self):
-        return ModelSchemaEditor(self)
 
     @property
     def model_fields(self):
@@ -83,17 +86,18 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     def save(self, **kwargs):
         super().save(**kwargs)
-        self._cacher.set_last_modified(self)
-        self.schema_editor.update_table()
+        self.update_schema()
 
     def as_model(self):
         """Return a dynamic model represeted by this schema instance."""
-        cached = self.factory.get_model()
-        return cached if self.is_current(cached) else self.factory.build()
+        model = self.factory.get_model()
+        if self.schema_checker.is_current(model):
+            return model
+        return self.factory.regenerate()
 
-    def is_current(self, model):
-        """Checks if a model has the most up to date schema."""
-        return model and model._declared >= self._cacher.get_last_modified(self)
+    def update_schema(self):
+        self.schema_checker.update()
+        self.schema_editor.update()
 
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
@@ -103,35 +107,29 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         `unique`     -- sets UNIQUE constraint on the generated field
         `max_length` -- sets Django's max_length option on generated CharFields
         """
-        field = DynamicModelField.objects.create(
+        return DynamicModelField.objects.create(
             model=self,
             field=field,
             **options
         )
-        self.save()
-        self.schema_editor.update_field(field)
-        return field
 
-    def remove_field(self, field):
+    def remove_field(self, field_schema):
         """Remove a field from this model schema."""
-        to_delete = self._get_field(field)
-        self.schema_editor.delete_field(to_delete)
+        to_delete = self._get_field(field_schema)
         to_delete.delete()
-        self.save()
 
-    def update_field(self, field, **options):
+    def update_field(self, field_schema, **options):
         """Updates the given model field with new options."""
-        field = self._get_field(field)
+        field = self._get_field(field_schema)
         updated_field = self._set_field_options(field, options)
-        self.schema_editor.update_field(field)
-        self.save()
+        updated_field.save()
         return updated_field
 
-    def _get_field(self, field):
-        field_ct = ContentType.objects.get_for_model(field)
+    def get_field(self, field_schema):
+        field_ct = ContentType.objects.get_for_model(field_schema)
         return self._model_fields_queryset().get(
             field_content_type=field_ct,
-            field_id=field.id
+            field_id=field_schema.id
         )
 
     def _set_field_options(self, field, options):
@@ -250,9 +248,18 @@ class DynamicModelField(models.Model):
     def schema_editor(self):
         return FieldSchemaEditor(self.model, self.field)
 
+    @cached_property
+    def schema_checker(self):
+        return self.model.schema_checker
+
+    def update_schema(self):
+        self.schema_checker.update()
+        self.schema_editor.update()
+
     def save(self, **kwargs): # pylint: disable=arguments-differ
         self._check_null_is_valid()
         super().save(**kwargs)
+        self.update_schema()
 
     def _check_null_is_valid(self):
         if self._initial_null and not self.null:
@@ -277,5 +284,10 @@ class DynamicModelField(models.Model):
             self.max_length = utils.default_max_length()
 
     def _requires_max_length(self):
-        field_kwargs = self.as_field().deconstruct[2]
-        return 'max_length' in field_kwargs
+        return issubclass(self.field.constructor, models.CharField)
+
+
+@receiver(models.signals.pre_delete, sender=DynamicModelField)
+def drop_table_field(sender, instance, **kwargs):
+    instance.schema_editor.drop()
+    instance.schema_checker.update()

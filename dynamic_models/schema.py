@@ -1,20 +1,29 @@
 """Wrapper functions for performing runtime schema changes."""
 from django.db import connection
+from django.utils import timezone
 from django.core.cache import cache
 from . import utils
 
 
-class ModelSchemaCacher:
+class ModelSchemaChecker:
     key_prefix = utils.cache_key_prefix()
 
-    def get_last_modified(self, schema):
-        return cache.get(self._make_cache_key(schema))
+    def __init__(self, schema):
+        self.schema = schema
+        self.cache_key = self._make_cache_key(schema)
 
-    def set_last_modified(self, schema, timeout=60*60*24*3):
-        return cache.set(self._make_cache_key(schema), schema.modified, timeout)
+    def get_last_modified(self):
+        return cache.get(self.cache_key)
 
-    def delete(self, schema):
-        return cache.delete(self._make_cache_key(schema))
+    def update(self, timeout=60*60*24*2):
+        return cache.set(self.cache_key, self.schema.modified, timeout)
+
+    def is_current(self, model):
+        last_modified = self.get_last_modified()
+        return last_modified and last_modified <= model._declared
+
+    def delete(self):
+        return cache.delete(self.cache_key)
 
     @classmethod
     def _make_cache_key(cls, schema):
@@ -25,7 +34,7 @@ class BaseSchemaEditor:
     def __init__(self, schema):
         self.schema = schema
         self.editor = connection.schema_editor
-        self.initial_name = self.get_name()
+        self.set_initial()
 
     def get_model(self):
         return self.schema.as_model()
@@ -42,7 +51,7 @@ class BaseSchemaEditor:
             self.create()
         elif self.is_changed():
             self.alter()
-            self.sync()
+            self.set_initial()
 
     def create(self):
         raise NotImplementedError()
@@ -53,7 +62,7 @@ class BaseSchemaEditor:
     def drop(self):
         raise NotImplementedError()
 
-    def sync(self):
+    def set_initial(self):
         self.initial_name = self.get_name()
 
     def is_changed(self):
@@ -87,9 +96,8 @@ class ModelSchemaEditor(BaseSchemaEditor):
 
 class FieldSchemaEditor(BaseSchemaEditor):
     def __init__(self, model_schema, field_schema):
-        super().__init__(self, model_schema)
         self.field_schema = field_schema
-        self.initial_field = self.get_model()._meta.get_field(self.initial_name)
+        super().__init__(model_schema)
 
     def get_name(self):
         """Return the column name of the field."""
@@ -136,6 +144,6 @@ class FieldSchemaEditor(BaseSchemaEditor):
         """Check if the field schema has changed."""
         return self.initial_field == self.get_field()
 
-    def sync(self):
-        super().sync()
+    def set_initial(self):
+        super().set_initial()
         self.initial_field = self.get_field()

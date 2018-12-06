@@ -33,7 +33,6 @@ class ModelFactory:
     def destroy(self):
         self._disconnect_schema_checker()
         self._unregister_model()
-        self.model = None
 
     def _is_registered(self):
         model_key = self.schema.model_name.lower()
