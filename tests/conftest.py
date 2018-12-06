@@ -1,29 +1,42 @@
 import pytest
+from django.db.utils import OperationalError
+from dynamic_models.utils import db_table_exists
 from .models import ModelSchema, FieldSchema
 
 # pylint: disable=unused-argument,invalid-name
 
 
+def clean_up_model(model_schema):
+    _try_destroy(model_schema)
+    _try_drop_table(model_schema)
+
+def _try_drop_table(model_schema):
+    try:
+        model_schema.schema_editor.drop()
+    except OperationalError:
+        # raised when the table has already been deleted somewhere
+        pass
+
+def _try_destroy(model_schema):
+    try:
+        model_schema.factory.destroy()
+    except KeyError: 
+        # usually raised when model has been unregistered at another time
+        pass
+
 @pytest.fixture
-def model_schema(request, db):
+def model_schema(db):
     """Creates and yields an instance of the model schema.
 
     A database table should be created when it is loaded and cleaned up after
     the test.
     """
-    instance = ModelSchema.objects.create(name='simple model')
+    model_schema = ModelSchema.objects.create(name='simple model')
     try:
-        yield instance
+        yield model_schema
     finally:
-        instance.delete()
+        clean_up_model(model_schema)
 
-@pytest.fixture
-def model_schema_no_delete(db):
-    """Creates a model schema instance that must be manually cleaned up.
-
-    Use this fixture to test for correct deletion behavior.
-    """
-    return ModelSchema.objects.create(name='simple model')
 
 @pytest.fixture
 def int_field_schema(db):

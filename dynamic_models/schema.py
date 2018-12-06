@@ -1,7 +1,7 @@
 """Wrapper functions for performing runtime schema changes."""
 from django.db import connection
-from django.utils import timezone
 from django.core.cache import cache
+from django.core.exceptions import FieldDoesNotExist
 from . import utils
 
 
@@ -12,14 +12,14 @@ class ModelSchemaChecker:
         self.schema = schema
         self.cache_key = self._make_cache_key(schema)
 
-    def get_last_modified(self):
+    def get_last(self):
         return cache.get(self.cache_key)
 
-    def update(self, timeout=60*60*24*2):
-        return cache.set(self.cache_key, self.schema.modified, timeout)
+    def update(self, time, timeout=60*60*24*2):
+        return cache.set(self.cache_key, time, timeout)
 
-    def is_current(self, model):
-        last_modified = self.get_last_modified()
+    def is_current_model(self, model):
+        last_modified = self.get_last()
         return last_modified and last_modified <= model._declared
 
     def delete(self):

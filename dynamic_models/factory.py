@@ -1,10 +1,9 @@
 from django.db import models
 from django.apps import apps
 from django.utils import timezone
-from django.core.cache import cache
 
 from . import utils
-from .exceptions import OutdatedModelError, ModelDoesNotExistError
+from .exceptions import OutdatedModelError
 
 
 class ModelFactory:
@@ -13,8 +12,10 @@ class ModelFactory:
 
     def get_model(self):
         if self._is_registered():
-            return utils.get_registered_model(self.schema)
-        return self.build()
+            model = utils.get_registered_model(self.schema)
+            if self.schema.is_current_model(model):
+                return model
+        return self.regenerate()
 
     def regenerate(self):
         if self._is_registered():

@@ -9,6 +9,7 @@ are perfectly usable without adding any additional fields.
 """
 from django.db import models
 from django.dispatch import receiver
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
 from django.contrib.contenttypes.models import ContentType
@@ -42,10 +43,14 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     `modified` -- a timestamp of the last time the instance wsa changed
     """
     name = models.CharField(max_length=32, unique=True, editable=False)
-    modified = models.DateTimeField(auto_now=True)
+    modified = models.DateTimeField(null=True)
 
     class Meta:
         abstract = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._model = None
 
     @cached_property
     def factory(self):
@@ -85,19 +90,19 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         )
 
     def save(self, **kwargs):
+        self.modified = timezone.now()
         super().save(**kwargs)
-        self.update_schema()
+        self.schema_checker.update(self.modified)
+        self.schema_editor.update()
 
     def as_model(self):
         """Return a dynamic model represeted by this schema instance."""
-        model = self.factory.get_model()
-        if self.schema_checker.is_current(model):
-            return model
-        return self.factory.regenerate()
+        if not (self._model and self.schema_checker.is_current_model(self._model)):
+            self._model = self.factory.regenerate()
+        return self._model
 
-    def update_schema(self):
-        self.schema_checker.update()
-        self.schema_editor.update()
+    def is_current_model(self, model):
+        return self.schema_checker.is_current_model(model)
 
     def add_field(self, field, **options):
         """Add a field to the model schema with the constraint options.
@@ -115,12 +120,12 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
 
     def remove_field(self, field_schema):
         """Remove a field from this model schema."""
-        to_delete = self._get_field(field_schema)
+        to_delete = self.get_field(field_schema)
         to_delete.delete()
 
     def update_field(self, field_schema, **options):
         """Updates the given model field with new options."""
-        field = self._get_field(field_schema)
+        field = self.get_field(field_schema)
         updated_field = self._set_field_options(field, options)
         updated_field.save()
         return updated_field
@@ -252,14 +257,14 @@ class DynamicModelField(models.Model):
     def schema_checker(self):
         return self.model.schema_checker
 
-    def update_schema(self):
-        self.schema_checker.update()
-        self.schema_editor.update()
-
     def save(self, **kwargs): # pylint: disable=arguments-differ
         self._check_null_is_valid()
         super().save(**kwargs)
         self.update_schema()
+
+    def update_schema(self):
+        self.schema_checker.update(timezone.now())
+        self.schema_editor.update()
 
     def _check_null_is_valid(self):
         if self._initial_null and not self.null:
