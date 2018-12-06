@@ -1,3 +1,4 @@
+from datetime import timedelta
 from functools import partial
 import pytest
 from django.utils import timezone
@@ -70,6 +71,7 @@ class TestFieldSchemaEditor:
         assert has_field(initial_field_name), "field not added correctly"
 
         field_schema.field.name = 'different name'
+        field_schema.field.save()
         field_schema.schema_editor.alter()
         assert not has_field(initial_field_name), "old field still exists"
         assert has_field(field_schema.column_name), "new field does not exist"
@@ -78,7 +80,9 @@ class TestFieldSchemaEditor:
 class TestModelSchemaChecker:
 
     def update_schema_timestamp(self, schema):
-        schema.schema_checker.update(timezone.now())
+        # Sometimes this fails to produce a different time than the next model
+        # declaration if a microsecond is not subtracted
+        schema.schema_checker.update(timezone.now() - timedelta(microseconds=1))
 
     def test_outdated_model_is_updated_automatically(self, model_schema):
         checker = model_schema.schema_checker
