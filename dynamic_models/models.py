@@ -32,10 +32,6 @@ class LastModifiedBase(models.Model):
     class Meta:
         abstract = True
 
-    def save(self, **kwargs):
-        super().save(**kwargs)
-        self.last_modified = self._modified
-
     def is_current_schema(self):
         return self._modified >= self.last_modified
 
@@ -71,7 +67,8 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def save(self, **kwargs):
         super().save(**kwargs)
-        self.schema_editor.migrate()
+        self.last_modified = self._modified
+        self.schema_editor.update_table()
 
     @property
     def app_label(self):
@@ -120,6 +117,15 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
     def get_fields(self):
         return ModelFieldSchema.objects.for_model(self)
 
+    def add_field(self, field_schema):
+        pass
+
+    def update_field(self, field_schema, **options):
+        pass
+
+    def remove_field(self, field_schema):
+        pass
+
 
 class AbstractFieldSchema(models.Model):
     name = models.CharField(max_length=16)
@@ -153,7 +159,7 @@ class AbstractFieldSchema(models.Model):
     def update_last_modified(self):
         now = timezone.now()
         for model_schema in self.get_models():
-            model_schema.last_modified = timezone.now()
+            model_schema.last_modified = now
 
 
 class ModelFieldSchemaManager(models.Manager):
@@ -205,10 +211,10 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
         super().__init__(*args, **kwargs)
         self._initial_null = self.null
 
-   # class Meta:
-   #     unique_together = (
-   #         'model_content_type', 'model_id', 'field_content_type', 'field_id'
-   #     ),
+    class Meta:
+        unique_together = (
+            'model_content_type', 'model_id', 'field_content_type', 'field_id'
+        ),
 
     @property
     def model(self):
@@ -229,8 +235,8 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
     def save(self, **kwargs):
         self.validate()
         super().save(**kwargs)
-        self.schema_editor.add_column()
         self.update_last_modified()
+        self.schema_editor.update_column()
 
     def validate(self):
         if self._initial_null and not self.null:
