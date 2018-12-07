@@ -6,10 +6,6 @@ class DynamicModelError(Exception):
     """Base exception for use in dynamic models."""
 
 
-class ModelDoesNotExistError(DynamicModelError):
-    """Raised when model is not found in the app registry."""
-
-
 class OutdatedModelError(DynamicModelError):
     """Raised when a model's schema is outdated on save."""
 

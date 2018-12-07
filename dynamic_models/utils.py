@@ -1,8 +1,10 @@
 """Various utility functions for the dynamic_models app."""
+import datetime
 from contextlib import contextmanager
 from django.db import connection
 from django.conf import settings
 from django.apps import apps
+from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist
 from . import exceptions
 
@@ -24,17 +26,6 @@ def cache_key_prefix():
 
 def _settings():
     return getattr(settings, 'DYNAMIC_MODELS', {})
-
-def get_registered_model(model_schema):
-    """Get a model from Django's app registry."""
-    try:
-        return apps.get_model(model_schema.app_label, model_schema.model_name)
-    except LookupError as err:
-        raise exceptions.ModelDoesNotExistError() from err
-
-def is_registered(model):
-    apps.clear_cache()
-    return model in apps.get_models()
 
 def db_table_exists(table_name):
     """Checks if the table name exists in the database."""
@@ -65,3 +56,41 @@ def _db_cursor():
     cursor = connection.cursor()
     yield cursor
     cursor.close()
+
+
+class LastModifiedCache:
+    def cache_key(self, model_schema):
+        return cache_key_prefix + model_schema.db_table
+
+    def get(self, model_schema):
+        """Return the last time of modification or the max date value."""
+        return cache.get(self.cache_key(model_schema), datetime.date.max)
+
+    def set(self, model_schema, timestamp, timeout=60*60*24*2):
+        cache.set(self.cache_key(model_schema), timestamp, timeout)
+
+    def delete(self, model_schema):
+        cache.delete(self.cache_key(model_schema))
+
+
+class ModelRegistry:
+    def __init__(self, app_label):
+        self.app_label = app_label
+
+    def try_model(self, model_name):
+        """Try to return a model from the app registry or None if not found."""
+        try:
+            return self.get_model(model_name)
+        except LookupError:
+            return None
+
+    def get_model(self, model_name):
+        """Get a model from Django's app registry."""
+        return apps.get_model(self.app_label, model_name)
+
+    def unregister_model(self, model_name):
+        """Remove a model from the app registry."""
+        try:
+            del apps.all_models[self.app_label][model_name.lower()]
+        except KeyError as err:
+            raise LookupError("'{}' not found.".format(model_name)) from err
