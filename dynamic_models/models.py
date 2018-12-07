@@ -7,6 +7,7 @@ are perfectly usable without adding any additional fields.
 `AbstractFieldSchema` -- base model for defining fields to use on dynamic models
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
+import datetime
 from django.db import models
 from django.dispatch import receiver
 from django.utils import timezone
@@ -22,6 +23,9 @@ from .schema import ModelSchemaEditor, FieldSchemaEditor, ModelSchemaChecker
 from .factory import ModelFactory
 
 
+LAST_MODIFIED_CACHE = LastModifiedCache()
+
+
 class ModelSchemaBase(models.base.ModelBase):
     def __new__(cls, name, bases, attrs, **kwargs):
         model = super().__new__(cls, name, bases, attrs, **kwargs)
@@ -29,13 +33,159 @@ class ModelSchemaBase(models.base.ModelBase):
             models.signals.pre_delete.connect(drop_model_table, sender=model)
         return model
 
-def drop_model_table(sender, instance, **kwargs):
+def drop_model_table(sender, instance, **kwargs): # pylint: disable=unused-argument
     instance.schema_editor.drop()
     instance.schema_checker.delete()
     instance.factory.destroy()
 
 
-class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
+class BaseSchema(models.Model):
+
+    name = models.CharField(max_length=32, unique=True)
+    _modified = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+    def save(self, **kwargs):
+        self.validate()
+        super().save(**kwargs)
+        self.last_modified = self._modified
+
+    def validate(self):
+        pass
+
+    def factory(self):
+        raise NotImplementedError()
+
+    @property
+    def db_name(self):
+        raise NotImplementedError()
+
+    @cached_property
+    def app_label(self):
+        return self.__class__._meta.app_label
+
+    def is_current_schema(self):
+        return self._modified >= self.last_modified
+
+    @property
+    def last_modified(self):
+        return LAST_MODIFIED_CACHE.get(self)
+
+    @last_modified.setter
+    def _set_last_modified(self, timestamp):
+        LAST_MODIFIED_CACHE.set(self, timestamp)
+
+
+class AbstractModelSchema(BaseSchema, metaclass=ModelSchemaBase):
+
+    class Meta:
+        abstract = True
+
+    def save(self, **kwargs):
+        super().save(**kwargs)
+        self.schema_editor.migrate(self.factory.build())
+
+    @property
+    def factory(self):
+        return ModelFactory(self)
+
+    @property
+    def schema_editor(self):
+        return ModelSchemaEditor(self)
+
+    @property
+    def db_name(self):
+        parts = (self.app_label, slugify(self.name).replace('-', '_'))
+        return '_'.join(parts)
+
+    def as_model(self):
+        if not self.is_current_schema():
+            self.refresh_from_db()
+        return self.factory.get_model()
+
+    def get_fields(self):
+        return ModelFieldSchema.objects.for_model(self)
+
+
+class AbstractFieldSchema(BaseSchema):
+
+    data_type = models.CharField(
+        max_length=16,
+        choices=FieldFactory.data_types()
+    )
+    
+    class Meta:
+        abstract = True
+
+    @property
+    def factory(self):
+        return FieldFactory(self)
+
+    @property
+    def db_name(self):
+        return slugify(self.name).replace('-', '_')
+
+    def get_models(self):
+        return ModelFieldSchema.objects.for_field(self)
+
+    def as_field(self):
+        return self.factory.build()
+
+
+class GenericModel:
+    model_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    model_id = models.PositiveIntegerField()
+    model_schema = GenericForeignKey('model_content_type', 'model_id')
+
+
+class GenericField:
+    field_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    field_id = models.PositiveIntegerField()
+    field_schema = GenericForeignKey('field_content_type', 'field_id')
+
+
+class ModelFieldSchemaManager(models.Manager):
+    def for_model(self, model_schema):
+        return self.get_queryset().filter(
+            model_content_type=ContentType.objects.get_for_model(model_schema),
+            model_id=model_schema.id
+        )
+
+    def for_field(self, field_schema):
+        return self.get_queryset().filter(
+            field_content_type=ContentType.objects.get_for_model(field_schema),
+            field_id=field_schema.id
+        )
+
+
+class ModelFieldSchema(GenericModel, GenericField, models.Model):
+
+    objects = ModelFieldSchemaManager()
+
+    null = models.BooleanField(default=True)
+    unique = models.BooleanField(default=False)
+    max_length = models.PositiveIntegerField(null=True)
+
+    @property
+    def model(self):
+        return self.model_schema.as_model()
+
+    @property
+    def field(self):
+        return self.model._meta.get_field(self.field_schema.db_name)
+
+    def save(self, **kwargs):
+        pass
+
+    def validate(self):
+        pass
+
+
+
+
+class _AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
     """Base model for the dynamic model schema table.
 
     Fields:
@@ -143,7 +293,7 @@ class AbstractModelSchema(models.Model, metaclass=ModelSchemaBase):
         return field
 
 
-class AbstractFieldSchema(models.Model):
+class _AbstractFieldSchema(models.Model):
     """Base model for dynamic field definitions.
 
     Data type choices are stored in the DATA_TYPES class attribute. DATA_TYPES
