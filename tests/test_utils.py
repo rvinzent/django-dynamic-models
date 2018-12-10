@@ -18,8 +18,7 @@ def test_default_max_length_setting(settings):
 
 
 class TestModelRegistry:
-	pass
-
+    pass
 
 class TestLastModifiedCache:
-	pass
+    pass
