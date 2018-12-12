@@ -1,79 +1,80 @@
 from django.db import models
-from django.apps import apps
 from django.utils import timezone
 
 from . import utils
 from .exceptions import OutdatedModelError
 
 
-class ModelFactory:
-    def __init__(self, model_schema):
-        self.schema = model_schema
+class FieldFactory:
+    # TODO: custom data types
+    DATA_TYPES = {
+        'character': models.CharField,
+        'text': models.TextField,
+        'integer': models.IntegerField,
+        'float': models.FloatField,
+        'boolean': models.BooleanField,
+    }
 
-    def make(self):
-        self._try_unregister()
+    def make(self, schema):
+        options = schema.get_options()
+        constructor = self.get_constructor(schema)
+        return constructor(**options)
+
+    def get_constructor(self, schema):
+        return self.DATA_TYPES[schema.data_type]
+
+    @classmethod
+    def data_types(cls):
+        return [(dt, dt) for dt in cls.DATA_TYPES]
+
+
+class ModelFactory:
+
+    field_factory = FieldFactory()
+
+    def make(self, schema):
+        schema.try_unregister_model()
         model = type(
-            self.schema.model_name,
+            schema.model_name,
             (models.Model,),
-            self._get_attributes()
+            self.get_attributes(schema)
         )
-        self._connect_schema_checker(model)
+        _connect_schema_checker(model)
         return model
 
-    def destroy(self):
-        self._disconnect_schema_checker()
-        self._try_unregister()
+    def destroy(self, schema):
+        _disconnect_schema_checker(schema)
+        schema.try_unregister_model()
 
-    def _get_attributes(self):
+    def get_attributes(self, schema):
         return {
-            **self._base_attributes(),
+            **self._base_attributes(schema),
             **utils.default_fields(),
-            **self._custom_fields()
+            **self._custom_fields(schema)
         }
 
-    def _base_attributes(self):
+    def _base_attributes(self, schema):
         return {
-            '__module__': '{}.models'.format(self.schema.app_label),
+            '__module__': '{}.models'.format(schema.app_label),
             '_declared': timezone.now(),
-            '_schema': self.schema,
-            'Meta': self._model_meta(),
+            '_schema': schema,
+            'Meta': self._model_meta(schema),
         }
 
-    def _custom_fields(self):
-        return {
-            field.db_column: field.make_field()
-            for field in self.schema.get_fields()
-        }
+    def _custom_fields(self, schema):
+        fields = {}
+        for field in schema.get_fields():
+            model_field = self.field_factory.make(field)
+            fields[field.db_column] = model_field
+        return fields
 
-    def _model_meta(self):
+    def _model_meta(self, schema):
         class Meta:
-            app_label = self.schema.app_label
-            db_table = self.schema.db_table
-            verbose_name = self.schema.name
+            app_label = schema.app_label
+            db_table = schema.db_table
+            verbose_name = schema.name
         return Meta
 
-    def _connect_schema_checker(self, model):
-        models.signals.pre_save.connect(
-            check_model_schema,
-            sender=model,
-            dispatch_uid=self._get_signal_uid()
-        )
-
-    def _disconnect_schema_checker(self):
-        models.signals.pre_save.disconnect(
-            check_model_schema,
-            dispatch_uid=self._get_signal_uid()
-        )
-
-    def _try_unregister(self):
-        try:
-            self.schema.unregister_model()
-        except LookupError:
-            pass
-
-    def _get_signal_uid(self):
-        return '{}_model_schema'.format(self.schema.model_name)
-    
 
 def check_model_schema(sender, instance, **kwargs): # pylint: disable=unused-argument
     """Check that the schema being used is the most up-to-date.
@@ -86,29 +87,18 @@ def check_model_schema(sender, instance, **kwargs): # pylint: disable=unused-arg
             "model {} has changed".format(sender.__name__)
         )
 
+def _connect_schema_checker(model):
+    models.signals.pre_save.connect(
+        check_model_schema,
+        sender=model,
+        dispatch_uid=_get_signal_uid(model._schema)
+    )
 
-class FieldFactory:
-    # TODO: custom data types configurable in settings
-    DATA_TYPES = {
-        'character': models.CharField,
-        'text': models.TextField,
-        'integer': models.IntegerField,
-        'float': models.FloatField,
-        'boolean': models.BooleanField,
-    }
+def _disconnect_schema_checker(schema):
+    models.signals.pre_save.disconnect(
+        check_model_schema,
+        dispatch_uid=_get_signal_uid(schema)
+    )
 
-    def __init__(self, field_schema):
-        self.schema = field_schema
-
-    def make(self):
-        options = self._get_options()
-        return self.constructor(**options)
-
-    @property
-    def constructor(self):
-        return self.DATA_TYPES[self.schema.data_type]
-
-    @classmethod
-    def data_types(cls):
-        return [(dt, dt) for dt in cls.DATA_TYPES.keys()]
-        
+def _get_signal_uid(schema):
+    return '{}_model_schema'.format(schema.model_name)

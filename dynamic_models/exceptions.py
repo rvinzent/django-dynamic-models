@@ -12,3 +12,7 @@ class OutdatedModelError(DynamicModelError):
 
 class NullFieldChangedError(DynamicModelError):
     """Raised when a field is attempted to be change from NULL to NOT NULL."""
+
+
+class InvalidFieldNameError(DynamicModelError):
+    """Raised when a field name is invalid."""
