@@ -22,8 +22,10 @@ class ModelFactory:
         return model
 
     def destroy(self):
-        _disconnect_schema_checker(self.schema)
-        self.schema.try_unregister_model()
+        last_model = self.schema.try_registered_model()
+        if last_model:
+            _disconnect_schema_checker(last_model)
+            self.schema.try_unregister_model()
 
     def get_attributes(self):
         return {
@@ -97,14 +99,15 @@ def _connect_schema_checker(model):
     models.signals.pre_save.connect(
         check_model_schema,
         sender=model,
-        dispatch_uid=_get_signal_uid(model._schema)
+        dispatch_uid=_get_signal_uid(model.__name__)
     )
 
-def _disconnect_schema_checker(schema):
+def _disconnect_schema_checker(model):
     models.signals.pre_save.disconnect(
         check_model_schema,
-        dispatch_uid=_get_signal_uid(schema)
+        sender=model,
+        dispatch_uid=_get_signal_uid(model.__name__)
     )
 
-def _get_signal_uid(schema):
-    return '{}_model_schema'.format(schema.model_name)
+def _get_signal_uid(model_name):
+    return '{}_model_schema'.format(model_name)

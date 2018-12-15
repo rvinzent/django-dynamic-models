@@ -2,13 +2,13 @@ import pytest
 from django.db import models
 from dynamic_models.factory import ModelFactory, FieldFactory
 from dynamic_models.models import ModelFieldSchema
-from dynamic_models.utils import db_field_allows_null
+from dynamic_models import utils
 from .models import ModelSchema, FieldSchema
 
 
 
 @pytest.fixture
-def model_schema_no_fields(db, monkeypatch):
+def model_schema(db, monkeypatch):
     schema = ModelSchema(name='no fields model')
 
     def get_empty_fields():
@@ -19,7 +19,7 @@ def model_schema_no_fields(db, monkeypatch):
 
 
 @pytest.fixture
-def model_schema_one_field(db, monkeypatch, integer_field_schema):
+def model_schema_with_field(db, monkeypatch, integer_field_schema):
     schema = ModelSchema(name='one field model')
     model_field_schema = ModelFieldSchema(
         model_schema=schema,
@@ -38,20 +38,56 @@ def integer_field_schema(db):
     return FieldSchema(name='integer', data_type='integer')
 
 
+@pytest.fixture
+def model_registry(model_schema):
+    return utils.ModelRegistry(model_schema.app_label)
+
+
 @pytest.mark.usefixtures('prevent_save')
 class TestModelFactory:
 
-    def test_no_field_model_has_base_attributes(self, model_schema_no_fields):
-        model = ModelFactory(model_schema_no_fields).make()
+    SCHEMA_CHECKER_RECEIVER = 'dynamic_models.factory.check_model_schema'
+
+    def schema_checker_is_connected(self, model):
+        return utils.receiver_is_connected(
+            self.SCHEMA_CHECKER_RECEIVER,
+            models.signals.pre_save,
+            model
+        )
+
+    def test_model_has_base_attributes(self, model_schema):
+        model = ModelFactory(model_schema).make()
         for attr in ('_schema', '_declared', '__module__'):
             assert hasattr(model, attr)
 
-    def test_model_has_field_schema_as_field(self, model_schema_one_field):
-        model = ModelFactory(model_schema_one_field).make()
+    def test_model_has_field_with_field_on_schema(self, model_schema_with_field):
+        model = ModelFactory(model_schema_with_field).make()
         assert isinstance(model._meta.get_field('integer'), models.IntegerField)
 
-    def test_schema_defines_model_meta(self, model_schema_no_fields):
-        model = ModelFactory(model_schema_no_fields).make()
-        assert model.__name__ == model_schema_no_fields.model_name
-        assert model._meta.db_table == model_schema_no_fields.db_table
-        assert model._meta.verbose_name == model_schema_no_fields.name
+    def test_schema_defines_model_meta(self, model_schema):
+        model = ModelFactory(model_schema).make()
+        assert model.__name__ == model_schema.model_name
+        assert model._meta.db_table == model_schema.db_table
+        assert model._meta.verbose_name == model_schema.name
+
+    def test_make_model_connects_signals(self, model_schema):
+        model = ModelFactory(model_schema).make()
+        assert self.schema_checker_is_connected(model)
+
+    def test_make_model_registers(self, model_registry, model_schema):
+        ModelFactory(model_schema).make()
+        assert model_registry.is_registered(model_schema.model_name)
+
+    def test_destroy_model_disconnects_signal(self, model_schema):
+        factory = ModelFactory(model_schema)
+        model = factory.make()
+        assert self.schema_checker_is_connected(model)
+        factory.destroy()
+        assert not self.schema_checker_is_connected(model)
+
+    def test_destroy_model_unregisters(self, model_registry, model_schema):
+        factory = ModelFactory(model_schema)
+        factory.make()
+        assert model_registry.is_registered(model_schema.model_name)
+        factory.destroy()
+        assert not model_registry.is_registered(model_schema.model_name)

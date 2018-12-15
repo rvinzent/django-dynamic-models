@@ -6,7 +6,6 @@ from django.conf import settings
 from django.apps import apps
 from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist
-from . import exceptions
 
 
 DEFAULT_MAX_LENGTH = 255
@@ -57,6 +56,13 @@ def _db_cursor():
     yield cursor
     cursor.close()
 
+def receiver_is_connected(receiver_name, signal, sender):
+    receivers = signal._live_receivers(sender)
+    receiver_strings = [
+        "{}.{}".format(r.__module__, r.__name__) for r in receivers
+    ]
+    return receiver_name in receiver_strings
+
 
 class LastModifiedCache:
     def cache_key(self, model_schema):
@@ -76,6 +82,9 @@ class LastModifiedCache:
 class ModelRegistry:
     def __init__(self, app_label):
         self.app_label = app_label
+
+    def is_registered(self, model_name):
+        return model_name.lower() in apps.all_models[self.app_label]
 
     def try_model(self, model_name):
         """Try to return a model from the app registry or None if not found."""
