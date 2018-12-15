@@ -65,12 +65,13 @@ def receiver_is_connected(receiver_name, signal, sender):
 
 
 class LastModifiedCache:
+
     def cache_key(self, model_schema):
-        return cache_key_prefix + model_schema.db_table
+        return cache_key_prefix() + model_schema.db_table
 
     def get(self, model_schema):
         """Return the last time of modification or the max date value."""
-        return cache.get(self.cache_key(model_schema), datetime.date.max)
+        return cache.get(self.cache_key(model_schema), datetime.datetime.max)
 
     def set(self, model_schema, timestamp, timeout=60*60*24*2):
         cache.set(self.cache_key(model_schema), timestamp, timeout)

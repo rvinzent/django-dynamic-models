@@ -3,6 +3,8 @@ from django.db import models
 from dynamic_models.utils import db_table_exists, db_table_has_field
 from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
 
+# pylint: disable=redefined-outer-name,invalid-name,unused-argument
+
 
 @pytest.fixture(scope='module')
 def generate_model():
@@ -142,7 +144,7 @@ class TestFieldSchemaEditor:
             changed_field_name_model,
             new_field
         )
-        
+
         assert db_table_has_field('tests_initialmodel', 'changed')
         assert not db_table_has_field('tests_initialmodel', 'integer')
 

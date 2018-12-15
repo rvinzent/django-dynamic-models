@@ -104,12 +104,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         return '_'.join(parts)
 
     def as_model(self):
-        registered = self.try_registered_model()
-        if registered:
-            if self.is_current_model(registered):
-                return registered
-            self.try_unregister_model()
-        return self.factory.make(self)
+        return self.factory.get_model()
 
     @cached_property
     def registry(self):

@@ -10,9 +10,16 @@ class ModelFactory:
 
     def __init__(self, model_schema):
         self.schema = model_schema
+        self.registry = utils.ModelRegistry(model_schema.app_label)
+
+    def get_model(self):
+        registered = self.get_registered_model()
+        if registered and self.schema.is_current_model(registered):
+            return registered
+        return self.make()
 
     def make(self):
-        self.schema.try_unregister_model()
+        self.try_unregister_model()
         model = type(
             self.schema.model_name,
             (models.Model,),
@@ -22,10 +29,19 @@ class ModelFactory:
         return model
 
     def destroy(self):
-        last_model = self.schema.try_registered_model()
+        last_model = self.get_registered_model()
         if last_model:
             _disconnect_schema_checker(last_model)
-            self.schema.try_unregister_model()
+            self.try_unregister_model()
+
+    def get_registered_model(self):
+        return self.registry.try_model(self.schema.model_name)
+
+    def try_unregister_model(self):
+        try:
+            self.registry.unregister_model(self.schema.model_name)
+        except LookupError:
+            pass
 
     def get_attributes(self):
         return {
@@ -58,7 +74,6 @@ class ModelFactory:
 
 
 class FieldFactory:
-    # TODO: custom data types
     DATA_TYPES = {
         'character': models.CharField,
         'text': models.TextField,

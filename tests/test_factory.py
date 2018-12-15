@@ -5,6 +5,7 @@ from dynamic_models.models import ModelFieldSchema
 from dynamic_models import utils
 from .models import ModelSchema, FieldSchema
 
+# pylint: disable=redefined-outer-name,invalid-name,unused-argument
 
 
 @pytest.fixture
@@ -54,6 +55,21 @@ class TestModelFactory:
             models.signals.pre_save,
             model
         )
+
+    def test_get_model_makes_if_not_exists(self, model_registry, model_schema):
+        assert not model_registry.is_registered(model_schema.model_name)
+        ModelFactory(model_schema).get_model()
+        assert model_registry.is_registered(model_schema.model_name)
+
+    def test_get_model_returns_registered_if_exists(self, monkeypatch, model_registry, model_schema):
+        factory = ModelFactory(model_schema)
+        model = factory.make()
+        assert model_registry.is_registered(model_schema.model_name)
+
+        # prevent future calls to `make` and assume model is current
+        monkeypatch.setattr(factory, 'make', lambda: None)
+        monkeypatch.setattr(model_schema, 'is_current_model', lambda x: True)
+        assert factory.get_model() == model
 
     def test_model_has_base_attributes(self, model_schema):
         model = ModelFactory(model_schema).make()
