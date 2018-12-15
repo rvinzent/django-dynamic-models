@@ -5,6 +5,56 @@ from . import utils
 from .exceptions import OutdatedModelError
 
 
+
+class ModelFactory:
+
+    def __init__(self, model_schema):
+        self.schema = model_schema
+
+    def make(self):
+        self.schema.try_unregister_model()
+        model = type(
+            self.schema.model_name,
+            (models.Model,),
+            self.get_attributes()
+        )
+        _connect_schema_checker(model)
+        return model
+
+    def destroy(self):
+        _disconnect_schema_checker(self.schema)
+        self.schema.try_unregister_model()
+
+    def get_attributes(self):
+        return {
+            **self._base_attributes(),
+            **utils.default_fields(),
+            **self._custom_fields()
+        }
+
+    def _base_attributes(self):
+        return {
+            '__module__': '{}.models'.format(self.schema.app_label),
+            '_declared': timezone.now(),
+            '_schema': self.schema,
+            'Meta': self._model_meta(),
+        }
+
+    def _custom_fields(self):
+        fields = {}
+        for field_schema in self.schema.get_fields():
+            model_field = FieldFactory(field_schema).make()
+            fields[field_schema.db_column] = model_field
+        return fields
+
+    def _model_meta(self):
+        class Meta:
+            app_label = self.schema.app_label
+            db_table = self.schema.db_table
+            verbose_name = self.schema.name
+        return Meta
+
+
 class FieldFactory:
     # TODO: custom data types
     DATA_TYPES = {
@@ -15,65 +65,21 @@ class FieldFactory:
         'boolean': models.BooleanField,
     }
 
-    def make(self, schema):
-        options = schema.get_options()
-        constructor = self.get_constructor(schema)
+    def __init__(self, field_schema):
+        self.schema = field_schema
+
+    def make(self):
+        options = self.schema.get_options()
+        constructor = self.get_constructor()
         return constructor(**options)
 
-    def get_constructor(self, schema):
-        return self.DATA_TYPES[schema.data_type]
+    def get_constructor(self):
+        return self.DATA_TYPES[self.schema.data_type]
 
     @classmethod
     def data_types(cls):
         return [(dt, dt) for dt in cls.DATA_TYPES]
 
-
-class ModelFactory:
-
-    field_factory = FieldFactory()
-
-    def make(self, schema):
-        schema.try_unregister_model()
-        model = type(
-            schema.model_name,
-            (models.Model,),
-            self.get_attributes(schema)
-        )
-        _connect_schema_checker(model)
-        return model
-
-    def destroy(self, schema):
-        _disconnect_schema_checker(schema)
-        schema.try_unregister_model()
-
-    def get_attributes(self, schema):
-        return {
-            **self._base_attributes(schema),
-            **utils.default_fields(),
-            **self._custom_fields(schema)
-        }
-
-    def _base_attributes(self, schema):
-        return {
-            '__module__': '{}.models'.format(schema.app_label),
-            '_declared': timezone.now(),
-            '_schema': schema,
-            'Meta': self._model_meta(schema),
-        }
-
-    def _custom_fields(self, schema):
-        fields = {}
-        for field in schema.get_fields():
-            model_field = self.field_factory.make(field)
-            fields[field.db_column] = model_field
-        return fields
-
-    def _model_meta(self, schema):
-        class Meta:
-            app_label = schema.app_label
-            db_table = schema.db_table
-            verbose_name = schema.name
-        return Meta
 
 
 def check_model_schema(sender, instance, **kwargs): # pylint: disable=unused-argument
