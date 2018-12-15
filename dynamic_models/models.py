@@ -35,10 +35,10 @@ class LastModifiedBase(models.Model):
 
     @property
     def last_modified(self):
-        return LAST_MODIFIED_CACHE.get(self) 
+        return LAST_MODIFIED_CACHE.get(self)
 
     @last_modified.setter
-    def _set_last_modified(self, timestamp):
+    def last_modified(self, timestamp):
         LAST_MODIFIED_CACHE.set(self, timestamp)
 
 
@@ -64,20 +64,36 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def save(self, **kwargs):
         super().save(**kwargs)
-        self.last_modified = self._modified
+        breakpoint()
         self.schema_editor.update_table(self.as_model())
+        self.last_modified = self._modified
 
     def get_fields(self):
         return ModelFieldSchema.objects.for_model(self)
 
-    def add_field(self, field_schema):
-        pass
+    def get_field_for_schema(self, field_schema):
+        field_ct = ContentType.objects.get_for_model(field_schema)
+        return self.get_fields().get(
+            field_content_type=field_ct,
+            field_id=field_schema.id
+        )
+
+    def add_field(self, field_schema, **options):
+        return ModelFieldSchema(
+            model_schema=self,
+            field_schema=field_schema,
+            **options
+        )
 
     def update_field(self, field_schema, **options):
-        pass
+        field_to_update = self.get_field_for_schema(field_schema)
+        for attr, value in options.items():
+            setattr(field_to_update, attr, value)
+        field_to_update.save()
+        return field_to_update
 
     def remove_field(self, field_schema):
-        pass
+        self.get_field_for_schema(field_schema).delete()
 
     def is_current_model(self, model):
         return model._declared >= self.last_modified
@@ -85,6 +101,13 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
     @cached_property
     def schema_editor(self):
         return ModelSchemaEditor(initial_model=self.try_registered_model())
+
+    def try_registered_model(self):
+        return self.registry.try_model(self.model_name)
+
+    @property
+    def registry(self):
+        return utils.ModelRegistry(self.app_label)
 
     @property
     def factory(self):
@@ -105,19 +128,6 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def as_model(self):
         return self.factory.get_model()
-
-    @cached_property
-    def registry(self):
-        return utils.ModelRegistry(self.app_label)
-
-    def try_registered_model(self):
-        return self.registry.try_model(self.model_name)
-
-    def try_unregister_model(self):
-        try:
-            self.registry.unregister_model(self.model_name)
-        except LookupError:
-            pass
 
 
 class AbstractFieldSchema(models.Model):
