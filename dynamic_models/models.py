@@ -48,7 +48,7 @@ class ModelSchemaBase(models.base.ModelBase):
         if not model._meta.abstract and issubclass(model, AbstractModelSchema):
             models.signals.pre_delete.connect(drop_model_table, sender=model)
         return model
-    
+
 
 def drop_model_table(sender, instance, **kwargs): # pylint: disable=unused-argument
     instance.schema_editor.drop()
@@ -61,7 +61,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     class Meta:
         abstract = True
-    
+
     def save(self, **kwargs):
         super().save(**kwargs)
         self.last_modified = self._modified
@@ -86,9 +86,9 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
     def schema_editor(self):
         return ModelSchemaEditor(initial_model=self.try_registered_model())
 
-    @cached_property
+    @property
     def factory(self):
-        return ModelFactory()
+        return ModelFactory(self)
 
     @property
     def app_label(self):

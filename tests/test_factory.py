@@ -91,3 +91,26 @@ class TestModelFactory:
         assert model_registry.is_registered(model_schema.model_name)
         factory.destroy()
         assert not model_registry.is_registered(model_schema.model_name)
+
+
+@pytest.mark.usefixtures('prevent_save')
+class TestFieldFactory:
+
+    @pytest.mark.parametrize('data_type, expected_class, options', [
+        ('integer', models.IntegerField, {}),
+        ('character', models.CharField, {'max_length': 255}),
+        ('text', models.TextField, {}),
+        ('float', models.FloatField, {}),
+        ('boolean', models.BooleanField, {})
+    ])
+    def test_make_field(self, data_type, expected_class, options):
+        schema = FieldSchema(name='field', data_type=data_type)
+        field_schema = ModelFieldSchema(field_schema=schema, **options)
+        field = FieldFactory(field_schema).make()
+        assert isinstance(field, expected_class)
+
+    def test_options_are_passed_to_field(self):
+        schema = FieldSchema(name='field', data_type='integer')
+        field_schema = ModelFieldSchema(field_schema=schema, null=True)
+        field = FieldFactory(field_schema).make()
+        assert field.null is True

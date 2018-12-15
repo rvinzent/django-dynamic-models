@@ -4,7 +4,7 @@ from .models import ModelSchema, FieldSchema
 
 # pylint: disable=unused-argument,invalid-name
 
-def raise_on_save():
+def raise_on_save(*args, **kwargs):
     raise AssertionError('save method should not be called')
 
 @pytest.fixture
