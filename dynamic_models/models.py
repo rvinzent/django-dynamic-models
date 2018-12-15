@@ -64,7 +64,6 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def save(self, **kwargs):
         super().save(**kwargs)
-        breakpoint()
         self.schema_editor.update_table(self.as_model())
         self.last_modified = self._modified
 
