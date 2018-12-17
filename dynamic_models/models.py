@@ -65,12 +65,12 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
     class Meta:
         abstract = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Initialize the schema editor with the currently registered model and the
         initial name.
         """
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
         self._initial_name = self.name
         initial_model = self.try_registered_model()
         self._schema_editor = ModelSchemaEditor(initial_model)
@@ -96,6 +96,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def get_field_for_schema(self, field_schema):
         field_ct = ContentType.objects.get_for_model(field_schema)
+        initial_field = self.as_model()._meta.get_field(field_schema.db_column)
         return self.get_fields().get(
             field_content_type=field_ct,
             field_id=field_schema.id
@@ -168,8 +169,8 @@ class AbstractFieldSchema(models.Model):
     class Meta:
         abstract = True
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._initial_name = self.name
 
     def save(self, **kwargs):
@@ -240,7 +241,7 @@ class GenericField(models.Model):
         abstract = True
 
 
-class ModelFieldSchema(GenericModel, GenericField, models.Model):
+class ModelFieldSchema(GenericModel, GenericField):
 
     objects = ModelFieldSchemaManager()
 
@@ -253,25 +254,25 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
             'model_content_type', 'model_id', 'field_content_type', 'field_id'
         ),
 
-    # TODO: remove when NULL to not NULL changes are supported
-    def  __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def  __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._initial_null = self.null
-        initial_field = self.get_model_field() 
-        self._schema_editor = FieldSchemaEditor(initial_field)
-
-    def get_model_field(self):
-        return self.extract_model_field(self.model_schema.as_model())
-
-    def extract_model_field(self, model):
-        try:
-            return model._meta.get_field(self.field_schema.name)
-        except FieldDoesNotExist:
-            pass
 
     @property
     def schema_editor(self):
-        return self._schema_editor
+        return FieldSchemaEditor(self.initial_field)
+
+    @property
+    def initial_field(self):
+        initial_model = self.model_schema.try_registered_model()
+        if initial_model:
+            return self._extract_model_field(initial_model)
+
+    def _extract_model_field(self, model):
+        try:
+            return model._meta.get_field(self.db_column)
+        except FieldDoesNotExist:
+            pass
 
     @property
     def data_type(self):
@@ -300,14 +301,14 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
         model = self.model_schema.as_model()
         self.schema_editor.update_column(
             model,
-            self.extract_model_field(model)
+            model._meta.get_field(self.db_column)
         )
 
     def drop_column(self):
         model = self.model_schema.as_model()
         self.schema_editor.drop_column(
             model,
-            self.extract_model_field(model)
+            model._meta.get_field(self.db_column)
         )
 
     def get_options(self):

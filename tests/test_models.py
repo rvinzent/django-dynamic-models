@@ -23,7 +23,7 @@ def field_schema(db):
     return FieldSchema.objects.create(name='field', data_type='integer')
 
 @pytest.fixture
-def existing_column(model_schema, field_schema):
+def existing_column(db, model_schema, field_schema):
     model_schema.add_field(field_schema)
 
 
@@ -74,6 +74,7 @@ class TestModelSchema:
         model_schema.add_field(field_schema)
         assert utils.db_table_has_field(table_name, column_name)
 
+    @pytest.mark.skip
     @pytest.mark.usefixtures('existing_column')
     def test_update_field_schema_updates_column(self, model_schema, field_schema):
         pass
