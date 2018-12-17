@@ -12,6 +12,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
+from django.core.exceptions import FieldDoesNotExist
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 
@@ -41,6 +42,10 @@ class LastModifiedBase(models.Model):
     def last_modified(self, timestamp):
         LAST_MODIFIED_CACHE.set(self, timestamp)
 
+    @last_modified.deleter
+    def last_modified(self):
+        LAST_MODIFIED_CACHE.delete(self)
+
 
 class ModelSchemaBase(models.base.ModelBase):
     def __new__(cls, name, bases, attrs, **kwargs):
@@ -51,9 +56,7 @@ class ModelSchemaBase(models.base.ModelBase):
 
 
 def drop_model_table(sender, instance, **kwargs): # pylint: disable=unused-argument
-    instance.schema_editor.drop()
-    instance.schema_checker.delete()
-    instance.factory.destroy()
+    instance.destroy_model()
 
 
 class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
@@ -62,10 +65,31 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
     class Meta:
         abstract = True
 
+    def __init__(self, **kwargs):
+        """
+        Initialize the schema editor with the currently registered model and the
+        initial name.
+        """
+        super().__init__(**kwargs)
+        self._initial_name = self.name
+        initial_model = self.try_registered_model()
+        self._schema_editor = ModelSchemaEditor(initial_model)
+
+    @property
+    def schema_editor(self):
+        return self._schema_editor
+
+    @cached_property
+    def registry(self):
+        return utils.ModelRegistry(self.app_label)
+
     def save(self, **kwargs):
         super().save(**kwargs)
-        self.schema_editor.update_table(self.as_model())
         self.last_modified = self._modified
+        self.schema_editor.update_table(self.factory.make())
+
+    def try_registered_model(self):
+        return self.registry.try_model(self.model_name)
 
     def get_fields(self):
         return ModelFieldSchema.objects.for_model(self)
@@ -78,7 +102,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         )
 
     def add_field(self, field_schema, **options):
-        return ModelFieldSchema(
+        return ModelFieldSchema.objects.create(
             model_schema=self,
             field_schema=field_schema,
             **options
@@ -97,17 +121,6 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
     def is_current_model(self, model):
         return model._declared >= self.last_modified
 
-    @cached_property
-    def schema_editor(self):
-        return ModelSchemaEditor(initial_model=self.try_registered_model())
-
-    def try_registered_model(self):
-        return self.registry.try_model(self.model_name)
-
-    @property
-    def registry(self):
-        return utils.ModelRegistry(self.app_label)
-
     @property
     def factory(self):
         return ModelFactory(self)
@@ -118,7 +131,15 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     @property
     def model_name(self):
-        return self.name.title().replace(' ', '')
+        return self.get_model_name(self.name)
+
+    @property
+    def initial_model_name(self):
+        return self.get_model_name(self._initial_name)
+
+    @classmethod
+    def get_model_name(cls, name):
+        return name.title().replace(' ', '')
 
     @property
     def db_table(self):
@@ -127,6 +148,11 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def as_model(self):
         return self.factory.get_model()
+
+    def destroy_model(self):
+        self.schema_editor.drop_table(self.as_model())
+        self.factory.destroy()
+        del self.last_modified
 
 
 class AbstractFieldSchema(models.Model):
@@ -141,6 +167,10 @@ class AbstractFieldSchema(models.Model):
 
     class Meta:
         abstract = True
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._initial_name = self.name
 
     def save(self, **kwargs):
         self.validate()
@@ -224,9 +254,24 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
         ),
 
     # TODO: remove when NULL to not NULL changes are supported
-    def  __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def  __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._initial_null = self.null
+        initial_field = self.get_model_field() 
+        self._schema_editor = FieldSchemaEditor(initial_field)
+
+    def get_model_field(self):
+        return self.extract_model_field(self.model_schema.as_model())
+
+    def extract_model_field(self, model):
+        try:
+            return model._meta.get_field(self.field_schema.name)
+        except FieldDoesNotExist:
+            pass
+
+    @property
+    def schema_editor(self):
+        return self._schema_editor
 
     @property
     def data_type(self):
@@ -240,7 +285,7 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
         self.validate()
         super().save(**kwargs)
         self.update_last_modified()
-        self.schema_editor.update_column()
+        self.update_column()
 
     def validate(self):
         if self._initial_null and not self.null:
@@ -250,6 +295,20 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
 
     def update_last_modified(self):
         self.model_schema.last_modified = timezone.now()
+
+    def update_column(self):
+        model = self.model_schema.as_model()
+        self.schema_editor.update_column(
+            model,
+            self.extract_model_field(model)
+        )
+
+    def drop_column(self):
+        model = self.model_schema.as_model()
+        self.schema_editor.drop_column(
+            model,
+            self.extract_model_field(model)
+        )
 
     def get_options(self):
         options = {'null': self.null, 'unique': self.unique}
@@ -269,6 +328,6 @@ class ModelFieldSchema(GenericModel, GenericField, models.Model):
 
 
 @receiver(models.signals.pre_delete, sender=ModelFieldSchema)
-def drop_table_field(sender, instance, **kwargs):
-    instance.schema_editor.drop_column()
+def drop_table_column(sender, instance, **kwargs): # pylint: disable=unused-argument
+    instance.drop_column()
     instance.update_last_modified()

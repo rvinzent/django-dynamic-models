@@ -112,6 +112,10 @@ class TestModelFactory:
 @pytest.mark.usefixtures('prevent_save')
 class TestFieldFactory:
 
+    @pytest.fixture(autouse=True)
+    def ignore_model(self, monkeypatch):
+        monkeypatch.setattr(ModelFieldSchema, 'get_model_field', lambda x: ())
+
     @pytest.mark.parametrize('data_type, expected_class, options', [
         ('integer', models.IntegerField, {}),
         ('character', models.CharField, {'max_length': 255}),

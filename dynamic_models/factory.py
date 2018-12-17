@@ -10,7 +10,7 @@ class ModelFactory:
 
     def __init__(self, model_schema):
         self.schema = model_schema
-        self.registry = utils.ModelRegistry(model_schema.app_label)
+        self.registry = model_schema.registry
 
     def get_model(self):
         registered = self.get_registered_model()
@@ -35,11 +35,11 @@ class ModelFactory:
             self.try_unregister_model()
 
     def get_registered_model(self):
-        return self.registry.try_model(self.schema.model_name)
+        return self.schema.registry.try_model(self.schema.initial_model_name)
 
     def try_unregister_model(self):
         try:
-            self.registry.unregister_model(self.schema.model_name)
+            self.registry.unregister_model(self.schema.initial_model_name)
         except LookupError:
             pass
 
