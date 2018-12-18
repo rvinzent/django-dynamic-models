@@ -126,7 +126,7 @@ assert red_car.color == 'red'
 another_car = Car.objects.create()
 
 # Change the schema with 'update_field' to allow null
-# Note: null columns cannot currently be changes to not null
+# Note: null columns cannot currently be changed to not null
 car_model_schema.update_field(color_field_schema, null=True)
 
 # Remove a field from the model
@@ -134,4 +134,4 @@ car_model_schema.remove_field(color_field_schema)
 ```
 
 ## Support
-Official version support will be tested and defined pre-release.
+`django-dynamic-models` is tested on Python 3.6+ with Django 2.0+
