@@ -18,7 +18,6 @@ setup(
     packages=['dynamic_models'],
     install_requires=[
         'Django>=2.1',
-        'django-model-utils'
     ],
     tests_require=[
         'tox',
