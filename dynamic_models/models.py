@@ -164,7 +164,8 @@ class AbstractFieldSchema(models.Model):
     name = models.CharField(max_length=16)
     data_type = models.CharField(
         max_length=16,
-        choices=FieldFactory.data_types()
+        choices=FieldFactory.data_types(),
+        editable=False
     )
 
     class Meta:
@@ -188,6 +189,10 @@ class AbstractFieldSchema(models.Model):
     @classmethod
     def get_prohibited_names(cls):
         return cls.PROHIBITED_NAMES
+
+    @classmethod
+    def get_data_types(cls):
+        return [dt[0] for dt in FieldFactory.data_types()]
 
     @property
     def db_column(self):

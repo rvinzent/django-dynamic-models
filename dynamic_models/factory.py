@@ -80,6 +80,7 @@ class FieldFactory:
         'integer': models.IntegerField,
         'float': models.FloatField,
         'boolean': models.BooleanField,
+        'date': models.DateTimeField,
     }
 
     def __init__(self, field_schema):
