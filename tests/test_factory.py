@@ -121,12 +121,20 @@ class TestFieldFactory:
     ])
     def test_make_field(self, data_type, expected_class, options):
         schema = FieldSchema(name='field', data_type=data_type)
-        field_schema = ModelFieldSchema(field_schema=schema, **options)
+        field_schema = ModelFieldSchema(
+            model_schema=ModelSchema(name='mock'),
+            field_schema=schema,
+            **options
+        )
         field = FieldFactory(field_schema).make()
         assert isinstance(field, expected_class)
 
     def test_options_are_passed_to_field(self):
         schema = FieldSchema(name='field', data_type='integer')
-        field_schema = ModelFieldSchema(field_schema=schema, null=True)
+        field_schema = ModelFieldSchema(
+            model_schema=ModelSchema(name='mock'),
+            field_schema=schema,
+            null=True
+        )
         field = FieldFactory(field_schema).make()
         assert field.null is True

@@ -96,7 +96,6 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
     def get_field_for_schema(self, field_schema):
         field_ct = ContentType.objects.get_for_model(field_schema)
-        initial_field = self.as_model()._meta.get_field(field_schema.db_column)
         return self.get_fields().get(
             field_content_type=field_ct,
             field_id=field_schema.id
@@ -257,16 +256,16 @@ class ModelFieldSchema(GenericModel, GenericField):
     def  __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._initial_null = self.null
+        self.initial_field = self.get_latest_model_field()
 
     @property
     def schema_editor(self):
         return FieldSchemaEditor(self.initial_field)
 
-    @property
-    def initial_field(self):
-        initial_model = self.model_schema.try_registered_model()
-        if initial_model:
-            return self._extract_model_field(initial_model)
+    def get_latest_model_field(self):
+        latest_model = self.model_schema.try_registered_model()
+        if latest_model:
+            return self._extract_model_field(latest_model)
 
     def _extract_model_field(self, model):
         try:
@@ -298,18 +297,14 @@ class ModelFieldSchema(GenericModel, GenericField):
         self.model_schema.last_modified = timezone.now()
 
     def update_column(self):
-        model = self.model_schema.as_model()
-        self.schema_editor.update_column(
-            model,
-            model._meta.get_field(self.db_column)
-        )
+        self.schema_editor.update_column(*self._get_model_with_field())
 
     def drop_column(self):
+        self.schema_editor.drop_column(*self._get_model_with_field())
+
+    def _get_model_with_field(self):
         model = self.model_schema.as_model()
-        self.schema_editor.drop_column(
-            model,
-            model._meta.get_field(self.db_column)
-        )
+        return model, self._extract_model_field(model)
 
     def get_options(self):
         options = {'null': self.null, 'unique': self.unique}
