@@ -244,7 +244,7 @@ class ModelFieldSchema(GenericModel, GenericField):
 
     objects = ModelFieldSchemaManager()
 
-    null = models.BooleanField(default=True)
+    null = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 

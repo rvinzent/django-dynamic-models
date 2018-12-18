@@ -67,14 +67,25 @@ class TestModelSchema:
         model_schema.delete()
         assert not model_registry.is_registered(model_schema.model_name)
 
-    def test_add_field_schema_creates_colomn(self, model_schema, field_schema):
+    def test_add_field_creates_column(self, model_schema, field_schema):
         table_name = model_schema.db_table
         column_name = field_schema.db_column
         assert not utils.db_table_has_field(table_name, column_name)
         model_schema.add_field(field_schema)
         assert utils.db_table_has_field(table_name, column_name)
 
-    @pytest.mark.skip
     @pytest.mark.usefixtures('existing_column')
-    def test_update_field_schema_updates_column(self, model_schema, field_schema):
-        pass
+    def test_update_field_updates_column(self, model_schema, field_schema):
+        table_name = model_schema.db_table
+        column_name = field_schema.db_column
+        assert not utils.db_field_allows_null(table_name, column_name)
+        model_schema.update_field(field_schema, null=True)
+        assert utils.db_field_allows_null(table_name, column_name)
+
+    @pytest.mark.usefixtures('existing_column')
+    def test_remove_field_drops_column(self, model_schema, field_schema):
+        table_name = model_schema.db_table
+        column_name = field_schema.db_column
+        assert utils.db_table_has_field(table_name, column_name)
+        model_schema.remove_field(field_schema)
+        assert not utils.db_table_has_field(table_name, column_name)

@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('model_id', models.PositiveIntegerField()),
                 ('field_id', models.PositiveIntegerField()),
-                ('null', models.BooleanField(default=True)),
+                ('null', models.BooleanField(default=False)),
                 ('unique', models.BooleanField(default=False)),
                 ('max_length', models.PositiveIntegerField(null=True)),
                 ('field_content_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType')),
