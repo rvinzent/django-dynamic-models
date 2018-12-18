@@ -119,6 +119,8 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         self.get_field_for_schema(field_schema).delete()
 
     def is_current_model(self, model):
+        if model._schema.pk != self.pk:
+            raise ValueError("Can only be called on a model of this schema")
         return model._declared >= self.last_modified
 
     @property
@@ -194,13 +196,13 @@ class AbstractFieldSchema(models.Model):
     def requires_max_length(self):
         return self.data_type in self.__class__.MAX_LENGTH_DATA_TYPES
 
-    def get_related_models(self):
+    def get_related_model_schema(self):
         queryset = ModelFieldSchema.objects.for_field(self).prefetch_related('model_schema')
         return (field.model_schema for field in queryset)
 
     def update_last_modified(self):
         now = timezone.now()
-        for model_schema in self.get_related_models():
+        for model_schema in self.get_related_model_schema():
             model_schema.last_modified = now
 
 
