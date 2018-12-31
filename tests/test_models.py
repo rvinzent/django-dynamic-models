@@ -116,6 +116,12 @@ class TestFieldSchema:
         with pytest.raises(exceptions.InvalidFieldNameError):
             FieldSchema.objects.create(name=prohibited_name, data_type='integer')
 
+    def test_cannot_change_null_to_not_null(self, model_schema, field_schema):
+        model_field = model_schema.add_field(field_schema, null=True)
+        with pytest.raises(exceptions.NullFieldChangedError):
+            model_field.null = False
+            model_field.save()
+
     def test_related_model_schema_notified_on_update(
             self, model_schema, another_model_schema, field_schema):
 
