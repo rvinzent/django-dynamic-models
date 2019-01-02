@@ -11,7 +11,7 @@ This package provides abstract models to help Django developers quickly implemen
 
 Install `django-dynamic-model` from PyPi with:
 
-```python
+```
 pip install django-dynamic-model
 ```
 
