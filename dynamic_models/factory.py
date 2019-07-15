@@ -74,14 +74,20 @@ class ModelFactory:
 
 
 class FieldFactory:
-    DATA_TYPES = {
-        'character': models.CharField,
-        'text': models.TextField,
-        'integer': models.IntegerField,
-        'float': models.FloatField,
-        'boolean': models.BooleanField,
-        'date': models.DateTimeField,
-    }
+    DATA_TYPES = dict(
+        date=models.DateField,
+        auto=models.AutoField,
+        binary=models.BinaryField,
+        datetime=models.DateTimeField,
+        null_boolean=models.NullBooleanField,
+        text=models.TextField,
+        char=models.CharField,
+        integer=models.IntegerField,
+        big_integer=models.BigIntegerField,
+        url=models.URLField,
+        float=models.FloatField,
+        boolean=models.BooleanField,
+    )
 
     def __init__(self, field_schema):
         self.schema = field_schema
