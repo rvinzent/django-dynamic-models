@@ -260,7 +260,7 @@ class ModelFieldSchema(GenericModel, GenericField):
             'model_content_type', 'model_id', 'field_content_type', 'field_id'
         ),
 
-    def  __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._initial_null = self.null
         self.initial_field = self.get_latest_model_field()
