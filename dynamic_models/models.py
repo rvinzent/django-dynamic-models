@@ -270,6 +270,8 @@ class ModelFieldSchema(GenericModel, GenericField):
         return FieldSchemaEditor(self.initial_field)
 
     def get_latest_model_field(self):
+        if not self.model_schema:
+            return
         latest_model = self.model_schema.try_registered_model()
         if latest_model:
             return self._extract_model_field(latest_model)
