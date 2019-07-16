@@ -16,9 +16,7 @@ setup(
     long_description_content_type='text/markdown',
     license='MIT',
     packages=['dynamic_models'],
-    install_requires=[
-        'Django>=2.0',
-    ],
+    install_requires=[],
     tests_require=[
         'tox',
         'pytest',

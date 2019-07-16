@@ -8,7 +8,6 @@ are perfectly usable without adding any additional fields.
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
 from django.db import models
-from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
@@ -47,19 +46,7 @@ class LastModifiedBase(models.Model):
         LAST_MODIFIED_CACHE.delete(self)
 
 
-class ModelSchemaBase(models.base.ModelBase):
-    def __new__(cls, name, bases, attrs, **kwargs):
-        model = super().__new__(cls, name, bases, attrs, **kwargs)
-        if not model._meta.abstract and issubclass(model, AbstractModelSchema):
-            models.signals.pre_delete.connect(drop_model_table, sender=model)
-        return model
-
-
-def drop_model_table(sender, instance, **kwargs): # pylint: disable=unused-argument
-    instance.destroy_model()
-
-
-class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
+class AbstractModelSchema(LastModifiedBase):
     name = models.CharField(max_length=32, unique=True)
 
     class Meta:
@@ -92,6 +79,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         return self.registry.try_model(self.model_name)
 
     def get_fields(self):
+        ModelFieldSchema = utils.get_model_field_schema_model()
         return ModelFieldSchema.objects.for_model(self)
 
     def get_field_for_schema(self, field_schema):
@@ -102,6 +90,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         )
 
     def add_field(self, field_schema, **options):
+        ModelFieldSchema = utils.get_model_field_schema_model()
         return ModelFieldSchema.objects.create(
             model_schema=self,
             field_schema=field_schema,
@@ -202,6 +191,7 @@ class AbstractFieldSchema(models.Model):
         return self.data_type in self.__class__.MAX_LENGTH_DATA_TYPES
 
     def get_related_model_schema(self):
+        ModelFieldSchema = utils.get_model_field_schema_model()
         queryset = ModelFieldSchema.objects.for_field(self).prefetch_related('model_schema')
         return (field.model_schema for field in queryset)
 
@@ -226,11 +216,7 @@ class ModelFieldSchemaManager(models.Manager):
 
 
 class GenericModel(models.Model):
-    model_content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        related_name='model_field_columns'
-    )
+    model_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='model_field_columns')
     model_id = models.PositiveIntegerField()
     model_schema = GenericForeignKey('model_content_type', 'model_id')
 
@@ -239,7 +225,7 @@ class GenericModel(models.Model):
 
 
 class GenericField(models.Model):
-    field_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    field_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='model_field_tables')
     field_id = models.PositiveIntegerField()
     field_schema = GenericForeignKey('field_content_type', 'field_id')
 
@@ -247,15 +233,18 @@ class GenericField(models.Model):
         abstract = True
 
 
-class ModelFieldSchema(GenericModel, GenericField):
-
+class AbstractModelFieldSchema(GenericModel, GenericField):
     objects = ModelFieldSchemaManager()
+    ModelSchema = None
+    FieldSchema = None
 
     null = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
-    max_length = models.PositiveIntegerField(null=True)
+    max_length = models.PositiveIntegerField(null=True, blank=True)
+    primary_key = models.BooleanField(default=False)
 
     class Meta:
+        abstract = True
         unique_together = (
             'model_content_type', 'model_id', 'field_content_type', 'field_id'
         ),
@@ -302,6 +291,15 @@ class ModelFieldSchema(GenericModel, GenericField):
                 "{} cannot be changed to NOT NULL".format(self.db_column)
             )
 
+        if self.primary_key:
+            ModelFieldSchema = utils.get_model_field_schema_model()
+            fields = ModelFieldSchema.objects.for_model(self.model_schema)
+            other_primary_field = fields.filter(primary_key=True).exclude(pk=self.pk)
+
+            if other_primary_field.exists():
+                other_primary_field = other_primary_field.first()
+                raise exceptions.MultiplePrimaryKeyError('model already has a primary key, field_id={}'.format(other_primary_field.field_id))
+
     def update_last_modified(self):
         self.model_schema.last_modified = timezone.now()
 
@@ -316,7 +314,7 @@ class ModelFieldSchema(GenericModel, GenericField):
         return model, self._extract_model_field(model)
 
     def get_options(self):
-        options = {'null': self.null, 'unique': self.unique}
+        options = {'null': self.null, 'unique': self.unique, 'primary_key': self.primary_key}
         options.update(self._maybe_max_length())
         return options
 
@@ -330,9 +328,3 @@ class ModelFieldSchema(GenericModel, GenericField):
         if not self.max_length:
             self.max_length = utils.default_max_length()
             self.save()
-
-
-@receiver(models.signals.pre_delete, sender=ModelFieldSchema)
-def drop_table_column(sender, instance, **kwargs): # pylint: disable=unused-argument
-    instance.drop_column()
-    instance.update_last_modified()

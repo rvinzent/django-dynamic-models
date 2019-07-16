@@ -2,6 +2,8 @@
 
 All exceptions inherit from a `DynamicModelError` base class.
 """
+
+
 class DynamicModelError(Exception):
     """Base exception for use in dynamic models."""
 
@@ -16,3 +18,7 @@ class NullFieldChangedError(DynamicModelError):
 
 class InvalidFieldNameError(DynamicModelError):
     """Raised when a field name is invalid."""
+
+
+class MultiplePrimaryKeyError(DynamicModelError):
+    """Raised when a model get multiple primary key."""
