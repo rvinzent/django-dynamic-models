@@ -26,20 +26,31 @@ INSTALLED_APPS = [
     'dynamic_models',
     'django.contrib.conttenttypes'
 ]
+
+DYNAMIC_MODELS = {
+    'MODEL_FIELD_SCHEMA_MODEL': 'your_app.ModelFieldSchema',
+}
 ```
 
 ## Usage
 
-To begin, simply subclass `AbstractModelSchema` and `AbstractFieldSchema` from `dynamic_models.models`. The abstract models will still work if no additional fields are provided. The simplest way to get started with dynamic models would be to add subclasses to your app's `models.py`, and run migrations. Then, new models can be created dynamically by creating instances of model schema and field schema models.
+To begin, simply subclass `AbstractModelSchema`, `AbstractFieldSchema` and `AbstractModelFieldSchema` from `dynamic_models.models`. The abstract models will still work if no additional fields are provided. The simplest way to get started with dynamic models would be to add subclasses to your app's `models.py`, and run migrations. Then, new models can be created dynamically by creating instances of model schema and field schema models.
 
 ```python
-from dynamic_models.models import AbstractModelSchema, AbstractFieldSchema
+from dynamic_models.models import AbstractModelSchema, AbstractFieldSchema, AbstractModelFieldSchema
 
 class ModelSchema(AbstractModelSchema):
     pass
 
 class FieldSchema(AbstractFieldSchema):
     pass
+    
+class ModelFieldSchema(AbstractModelFieldSchema):
+    ModelSchema = ModelSchema
+    FieldSchema = FieldSchema
+
+    class Meta(AbstractModelFieldSchema.Meta):
+        pass
 ```
 
 Now, run the migration commands:
@@ -79,12 +90,18 @@ Creating field schema to add to models is quite similar to creating dynamic mode
 
 | Data Type | Django Field |
 |:---------:|:------------:|
-| character | CharField    |
+| auto      | AutoField|
+| char | CharField    |
 | text      | TextField    |
 | integer   | IntegerField |
+| big_integer   | BigIntegerField |
 | float     | FloatField   |
 | boolean   | BooleanField |
-| date      | DateTimeField|
+| null_boolean      | NullBooleanField|
+| binary      | BinaryField|
+| date      | DateField|
+| datetime      | DateTimeField|
+| url      | URLField|
 
 ```python
 car_model_schema = ModelSchema.objects.create(name='car')
