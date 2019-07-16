@@ -159,7 +159,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
 
 class AbstractFieldSchema(models.Model):
     PROHIBITED_NAMES = ('__module__', '_schema', '_declared')
-    MAX_LENGTH_DATA_TYPES = ('character',)
+    MAX_LENGTH_DATA_TYPES = ('char',)
 
     name = models.CharField(max_length=16)
     data_type = models.CharField(
