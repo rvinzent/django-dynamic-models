@@ -2,15 +2,14 @@ import pytest
 from django.apps import apps
 from django.core.cache import cache
 from dynamic_models import utils
-from dynamic_models.models import ModelFieldSchema
-from .models import ModelSchema, FieldSchema
+from .models import ModelSchema, FieldSchema, ModelFieldSchema
 
 # pylint: disable=unused-argument,invalid-name
 
 
 TEST_APP_LABEL = 'tests'
 MODEL_REGISTRY = utils.ModelRegistry(TEST_APP_LABEL)
-STATIC_MODELS = (ModelSchema, FieldSchema)
+STATIC_MODELS = (ModelSchema, FieldSchema, ModelFieldSchema)
 
 
 def raise_on_save(*args, **kwargs):

@@ -1,9 +1,8 @@
 import pytest
 from django.db import models
 from dynamic_models.factory import ModelFactory, FieldFactory
-from dynamic_models.models import ModelFieldSchema
 from dynamic_models import utils
-from .models import ModelSchema, FieldSchema
+from .models import ModelSchema, FieldSchema, ModelFieldSchema
 
 # pylint: disable=redefined-outer-name,invalid-name,unused-argument
 
@@ -114,7 +113,7 @@ class TestFieldFactory:
 
     @pytest.mark.parametrize('data_type, expected_class, options', [
         ('integer', models.IntegerField, {}),
-        ('character', models.CharField, {'max_length': 255}),
+        ('char', models.CharField, {'max_length': 255}),
         ('text', models.TextField, {}),
         ('float', models.FloatField, {}),
         ('boolean', models.BooleanField, {})

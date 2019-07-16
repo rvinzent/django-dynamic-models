@@ -24,3 +24,7 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'
     }
 }
+
+DYNAMIC_MODELS = {
+    'MODEL_FIELD_SCHEMA_MODEL': 'tests.ModelFieldSchema',
+}
