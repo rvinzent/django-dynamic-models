@@ -21,10 +21,13 @@ def model_schema(db, monkeypatch):
 @pytest.fixture
 def model_schema_with_field(db, monkeypatch, integer_field_schema):
     schema = ModelSchema(name='one field model')
+    schema.save()
+
     model_field_schema = ModelFieldSchema(
-        model_schema=schema,
-        field_schema=integer_field_schema,
+        model_id=schema.pk,
+        field_id=integer_field_schema.pk,
     )
+    model_field_schema.save()
 
     def get_single_field():
         return [model_field_schema]
@@ -35,7 +38,9 @@ def model_schema_with_field(db, monkeypatch, integer_field_schema):
 
 @pytest.fixture
 def integer_field_schema(db):
-    return FieldSchema(name='integer', data_type='integer')
+    schema = FieldSchema(name='integer', data_type='integer')
+    schema.save()
+    return schema
 
 
 @pytest.fixture
@@ -43,7 +48,7 @@ def model_registry(model_schema):
     return utils.ModelRegistry(model_schema.app_label)
 
 
-@pytest.mark.usefixtures('prevent_save')
+@pytest.mark.django_db
 class TestModelFactory:
 
     SCHEMA_CHECKER_RECEIVER = 'dynamic_models.factory.check_model_schema'
@@ -108,7 +113,7 @@ class TestModelFactory:
         assert not model_registry.is_registered(model_schema.model_name)
 
 
-@pytest.mark.usefixtures('prevent_save')
+@pytest.mark.django_db
 class TestFieldFactory:
 
     @pytest.mark.parametrize('data_type, expected_class, options', [
@@ -120,9 +125,13 @@ class TestFieldFactory:
     ])
     def test_make_field(self, data_type, expected_class, options):
         schema = FieldSchema(name='field', data_type=data_type)
+        schema.save()
+        model_schema = ModelSchema(name='mock')
+        model_schema.save()
+
         field_schema = ModelFieldSchema(
-            model_schema=ModelSchema(name='mock'),
-            field_schema=schema,
+            model_id=model_schema.pk,
+            field_id=schema.pk,
             **options
         )
         field = FieldFactory(field_schema).make()
@@ -130,9 +139,13 @@ class TestFieldFactory:
 
     def test_options_are_passed_to_field(self):
         schema = FieldSchema(name='field', data_type='integer')
+        schema.save()
+        model_schema = ModelSchema(name='mock')
+        model_schema.save()
+
         field_schema = ModelFieldSchema(
-            model_schema=ModelSchema(name='mock'),
-            field_schema=schema,
+            model_id=model_schema.pk,
+            field_id=schema.pk,
             null=True
         )
         field = FieldFactory(field_schema).make()

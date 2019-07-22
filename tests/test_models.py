@@ -165,7 +165,6 @@ class TestDynamicModels:
             dynamic_model.objects.get(pk=obj.pk)
 
     def test_cannot_save_with_outdated_model(self, model_schema, dynamic_model):
-        model_schema.name = 'new name'
-        model_schema.save()
+        model_schema.add_field(FieldSchema.objects.create(name='field_alias', data_type='integer'))
         with pytest.raises(exceptions.OutdatedModelError):
             dynamic_model.objects.create(field=4)

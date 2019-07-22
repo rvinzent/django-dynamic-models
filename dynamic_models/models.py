@@ -12,8 +12,6 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
 from django.core.exceptions import FieldDoesNotExist
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
 
 from . import utils
 from . import exceptions
@@ -83,17 +81,15 @@ class AbstractModelSchema(LastModifiedBase):
         return ModelFieldSchema.objects.for_model(self)
 
     def get_field_for_schema(self, field_schema):
-        field_ct = ContentType.objects.get_for_model(field_schema)
         return self.get_fields().get(
-            field_content_type=field_ct,
             field_id=field_schema.id
         )
 
     def add_field(self, field_schema, **options):
         ModelFieldSchema = utils.get_model_field_schema_model()
         return ModelFieldSchema.objects.create(
-            model_schema=self,
-            field_schema=field_schema,
+            model_id=self.pk,
+            field_id=field_schema.pk,
             **options
         )
 
@@ -192,8 +188,8 @@ class AbstractFieldSchema(models.Model):
 
     def get_related_model_schema(self):
         ModelFieldSchema = utils.get_model_field_schema_model()
-        queryset = ModelFieldSchema.objects.for_field(self).prefetch_related('model_schema')
-        return (field.model_schema for field in queryset)
+        queryset = ModelFieldSchema.objects.for_field(self)
+        return (ModelFieldSchema.ModelSchema.objects.get(pk=field.model_id) for field in queryset)
 
     def update_last_modified(self):
         now = timezone.now()
@@ -204,39 +200,22 @@ class AbstractFieldSchema(models.Model):
 class ModelFieldSchemaManager(models.Manager):
     def for_model(self, model_schema):
         return self.get_queryset().filter(
-            model_content_type=ContentType.objects.get_for_model(model_schema),
             model_id=model_schema.id
         )
 
     def for_field(self, field_schema):
         return self.get_queryset().filter(
-            field_content_type=ContentType.objects.get_for_model(field_schema),
             field_id=field_schema.id
         )
 
 
-class GenericModel(models.Model):
-    model_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='model_field_columns')
-    model_id = models.PositiveIntegerField()
-    model_schema = GenericForeignKey('model_content_type', 'model_id')
-
-    class Meta:
-        abstract = True
-
-
-class GenericField(models.Model):
-    field_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='model_field_tables')
-    field_id = models.PositiveIntegerField()
-    field_schema = GenericForeignKey('field_content_type', 'field_id')
-
-    class Meta:
-        abstract = True
-
-
-class AbstractModelFieldSchema(GenericModel, GenericField):
+class AbstractModelFieldSchema(models.Model):
     objects = ModelFieldSchemaManager()
     ModelSchema = None
     FieldSchema = None
+
+    model_id = models.PositiveIntegerField()
+    field_id = models.PositiveIntegerField()
 
     null = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
@@ -245,9 +224,7 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
 
     class Meta:
         abstract = True
-        unique_together = (
-            'model_content_type', 'model_id', 'field_content_type', 'field_id'
-        ),
+        unique_together = ('model_id', 'field_id'),
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -259,9 +236,10 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
         return FieldSchemaEditor(self.initial_field)
 
     def get_latest_model_field(self):
-        if not self.model_schema:
+        if not self.model_id:
             return
-        latest_model = self.model_schema.try_registered_model()
+        model_schema = self.ModelSchema.objects.get(pk=self.model_id)
+        latest_model = model_schema.try_registered_model()
         if latest_model:
             return self._extract_model_field(latest_model)
 
@@ -273,11 +251,13 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
 
     @property
     def data_type(self):
-        return self.field_schema.data_type
+        field_schema = self.FieldSchema.objects.get(pk=self.field_id)
+        return field_schema.data_type
 
     @property
     def db_column(self):
-        return self.field_schema.db_column
+        field_schema = self.FieldSchema.objects.get(pk=self.field_id)
+        return field_schema.db_column
 
     def save(self, **kwargs):
         self.validate()
@@ -293,7 +273,8 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
 
         if self.primary_key:
             ModelFieldSchema = utils.get_model_field_schema_model()
-            fields = ModelFieldSchema.objects.for_model(self.model_schema)
+            model_schema = self.ModelSchema.objects.get(pk=self.model_id)
+            fields = ModelFieldSchema.objects.for_model(model_schema)
             other_primary_field = fields.filter(primary_key=True).exclude(pk=self.pk)
 
             if other_primary_field.exists():
@@ -301,7 +282,8 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
                 raise exceptions.MultiplePrimaryKeyError('model already has a primary key, field_id={}'.format(other_primary_field.field_id))
 
     def update_last_modified(self):
-        self.model_schema.last_modified = timezone.now()
+        model_schema = self.ModelSchema.objects.get(pk=self.model_id)
+        model_schema.last_modified = timezone.now()
 
     def update_column(self):
         self.schema_editor.update_column(*self._get_model_with_field())
@@ -310,7 +292,8 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
         self.schema_editor.drop_column(*self._get_model_with_field())
 
     def _get_model_with_field(self):
-        model = self.model_schema.as_model()
+        model_schema = self.ModelSchema.objects.get(pk=self.model_id)
+        model = model_schema.as_model()
         return model, self._extract_model_field(model)
 
     def get_options(self):
@@ -319,7 +302,8 @@ class AbstractModelFieldSchema(GenericModel, GenericField):
         return options
 
     def _maybe_max_length(self):
-        if self.field_schema.requires_max_length():
+        field_schema = self.FieldSchema.objects.get(pk=self.field_id)
+        if field_schema.requires_max_length():
             self._ensure_max_length()
             return {'max_length': self.max_length}
         return {}
