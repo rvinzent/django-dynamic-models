@@ -15,16 +15,11 @@ Install `django-dynamic-model` from PyPi with:
 pip install django-dynamic-model
 ```
 
-Then, add `'dynamic_models'` and `django.contrib.contenttypes` to `INSTALLED_APPS`.
-> **Note**: 
-> 
-> Django's Content Types app is currently required, although this dependency may possibly removed in the future.
-
+Just config your settings to:
 ```python
 INSTALLED_APPS = [
     ...
-    'dynamic_models',
-    'django.contrib.conttenttypes'
+    'your_app',
 ]
 
 DYNAMIC_MODELS = {
