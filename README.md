@@ -19,7 +19,7 @@ Just config your settings to:
 ```python
 INSTALLED_APPS = [
     ...
-    'your_app',
+    'dynamic_models',
 ]
 
 DYNAMIC_MODELS = {
