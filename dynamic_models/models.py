@@ -7,6 +7,8 @@ are perfectly usable without adding any additional fields.
 `AbstractFieldSchema` -- base model for defining fields to use on dynamic models
 `DynamicModelField`   -- through model for attaching fields to dynamic models
 """
+import datetime
+
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -110,6 +112,10 @@ class AbstractModelSchema(LastModifiedBase):
         naive_last_modified = self.last_modified
         if not timezone.is_naive(self.last_modified):
             naive_last_modified = timezone.make_naive(self.last_modified)
+            
+        #  update cache
+        if naive_last_modified == datetime.datetime.max:
+            self.last_modified = self._modified
             
         naive_declared = model._declared
         if not timezone.is_naive(model._declared):
