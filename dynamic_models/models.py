@@ -107,9 +107,11 @@ class AbstractModelSchema(LastModifiedBase):
         if model._schema.pk != self.pk:
             raise ValueError("Can only be called on a model of this schema")
             
+        naive_last_modified = self.last_modified
         if not timezone.is_naive(self.last_modified):
             naive_last_modified = timezone.make_naive(self.last_modified)
             
+        naive_declared = model._declared
         if not timezone.is_naive(model._declared):
             naive_declared = timezone.make_naive(model._declared)
             
