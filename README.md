@@ -44,7 +44,7 @@ class FieldSchema(AbstractFieldSchema):
 
 Now, run the migration commands:
 ```
-$ python manage.py makemigrations
+$ python manage.py makemigrations 
 > ... making migrations ...
 
 $ python manage.py migrate
@@ -62,7 +62,7 @@ Creating a dynamic model is as simple as creating a new instance of your concret
 The default model_name will be `Car` and the default table_name `myapp_car` where "myapp" is the app label. The table name and model name are derived from the `name` value.
 
 ```python
-car_schema = ModelSchema.objects.create(name='car')
+car_model_schema = ModelSchema.objects.create(name='car')
 Car = car_model_schema.as_model()
 assert issubclass(Car, models.Model)
 
