@@ -44,7 +44,7 @@ class FieldSchema(AbstractFieldSchema):
 
 Now, run the migration commands:
 ```
-$ python manage.py makemigrations 
+$ python manage.py makemigrations
 > ... making migrations ...
 
 $ python manage.py migrate
