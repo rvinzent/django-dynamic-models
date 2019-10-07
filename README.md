@@ -1,4 +1,4 @@
-# django-dynamic-models
+# django-dynamic-models [![Build Status](https://travis-ci.com/rvinzent/django-dynamic-models.svg?branch=master)](https://travis-ci.com/rvinzent/django-dynamic-models)
 
 
 ## Overview
