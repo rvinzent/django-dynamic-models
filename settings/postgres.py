@@ -1,17 +1,15 @@
-"""
-PostgreSQL specific test settings.
-"""
-# pylint: disable=W0614, W0401
-from decouple import config
-from .base import *
+import os
+
+from settings.base import *  # pylint: disable=wildcard-import,unused-wildcard-import
+
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DYNAMIC_MODELS_DB', default='dynamic_models'),
-        'USER': config('DYNAMIC_MODELS_DB_USER', default='dynamic_models'),
-        'PASSWORD': config('DYNAMIC_MODELS_DB_PASSWORD', default=''),
-        'HOST': config('DYNAMIC_MODELS_POSTGRES_HOST', default='127.0.0.1'),
-        'PORT': config('DYNAMIC_MODELS_POSTGRES_PORT', default='5432', cast=int)
+        'NAME': os.environ.get('DATABASE_NAME', 'dynamic_models_test'),
+        'USER': os.environ.get('DATABASE_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD', ''),
+        'HOST': 'localhost',
+        'PORT':  5432,
     }
 }
