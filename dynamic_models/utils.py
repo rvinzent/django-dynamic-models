@@ -71,7 +71,8 @@ class LastModifiedCache:
 
     def get(self, model_schema):
         """Return the last time of modification or the max date value."""
-        return cache.get(self.cache_key(model_schema), datetime.datetime.max)
+        max_utc = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
+        return cache.get(self.cache_key(model_schema), max_utc)
 
     def set(self, model_schema, timestamp, timeout=60*60*24*2):
         cache.set(self.cache_key(model_schema), timestamp, timeout)
