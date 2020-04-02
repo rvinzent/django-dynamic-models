@@ -80,14 +80,12 @@ class ModelRegistry:
         return model_name.lower() in apps.all_models[self.app_label]
 
     def get_model(self, model_name):
-        """Get a model from Django's app registry."""
         try:
             return apps.get_model(self.app_label, model_name)
         except LookupError:
             return None
 
     def unregister_model(self, model_name):
-        """Remove a model from the app registry."""
         try:
             del apps.all_models[self.app_label][model_name.lower()]
         except KeyError as err:

@@ -2,7 +2,6 @@ from django.db import models
 from django.utils import timezone
 
 from dynamic_models import config
-from dynamic_models import utils
 from dynamic_models.exceptions import OutdatedModelError
 
 

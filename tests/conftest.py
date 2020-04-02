@@ -3,7 +3,7 @@ from django.apps import apps
 from django.core.cache import cache
 from dynamic_models import utils
 from dynamic_models.models import ModelFieldSchema
-from .models import ModelSchema, FieldSchema
+from tests.models import ModelSchema, FieldSchema
 
 # pylint: disable=unused-argument,invalid-name
 
