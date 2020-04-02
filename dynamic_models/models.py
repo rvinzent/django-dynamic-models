@@ -89,7 +89,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         self.schema_editor.update_table(self.factory.make())
 
     def try_registered_model(self):
-        return self.registry.try_model(self.model_name)
+        return self.registry.get_model(self.model_name)
 
     def get_fields(self):
         return ModelFieldSchema.objects.for_model(self)

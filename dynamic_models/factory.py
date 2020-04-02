@@ -1,8 +1,9 @@
 from django.db import models
 from django.utils import timezone
 
-from . import utils
-from .exceptions import OutdatedModelError
+from dynamic_models import config
+from dynamic_models import utils
+from dynamic_models.exceptions import OutdatedModelError
 
 
 
@@ -19,7 +20,7 @@ class ModelFactory:
         return self.make()
 
     def make(self):
-        self.try_unregister_model()
+        self.unregister_model()
         model = type(
             self.schema.model_name,
             (models.Model,),
@@ -32,12 +33,12 @@ class ModelFactory:
         last_model = self.get_registered_model()
         if last_model:
             _disconnect_schema_checker(last_model)
-            self.try_unregister_model()
+            self.unregister_model()
 
     def get_registered_model(self):
-        return self.schema.registry.try_model(self.schema.initial_model_name)
+        return self.schema.registry.get_model(self.schema.initial_model_name)
 
-    def try_unregister_model(self):
+    def unregister_model(self):
         try:
             self.registry.unregister_model(self.schema.initial_model_name)
         except LookupError:
@@ -46,7 +47,7 @@ class ModelFactory:
     def get_attributes(self):
         return {
             **self._base_attributes(),
-            **utils.default_fields(),
+            **config.default_fields(),
             **self._custom_fields()
         }
 

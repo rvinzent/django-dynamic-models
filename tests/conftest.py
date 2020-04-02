@@ -44,3 +44,33 @@ def cleanup_registry():
         ]
         for model in models_to_remove:
             MODEL_REGISTRY.unregister_model(model.__name__)
+
+
+@pytest.fixture
+def model_registry(model_schema):
+    return utils.ModelRegistry(model_schema.app_label)
+
+
+@pytest.fixture
+def unsaved_model_schema(db):
+    return ModelSchema(name='unsaved model')
+
+
+@pytest.fixture
+def model_schema(db):
+    return ModelSchema.objects.create(name='simple model')
+
+
+@pytest.fixture
+def another_model_schema(db):
+    return ModelSchema.objects.create(name='another model')
+
+
+@pytest.fixture
+def field_schema(db):
+    return FieldSchema.objects.create(name='field', data_type='integer')
+
+
+@pytest.fixture
+def existing_column(db, model_schema, field_schema):
+    model_schema.add_field(field_schema)
