@@ -11,21 +11,19 @@ setup(
     url='http://github.com/rvinzent/django-dynamic-models',
     author='Ryan Vinzent',
     author_email='rvinzent217@hotmail.com',
-    description='Allow users to create and use their own models',
+    description='Allow dynamic creation and updates to database schema at runtime.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='MIT',
     packages=['dynamic_models'],
     install_requires=[
-        'Django>=2.1',
+        'Django>=2.0',
     ],
     tests_require=[
         'tox',
         'pytest',
         'pytest-django',
         'pytest-cov',
-        'python-decouple',
-        'python-dotenv'
     ],
     classifiers=[
         'Intended Audience :: Developers',
