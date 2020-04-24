@@ -15,7 +15,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='MIT',
-    packages=['dynamic_models'],
+    packages=['dynamic_models', 'dynamic_models.migrations'],
     install_requires=[
         'Django>=2.0',
     ],
