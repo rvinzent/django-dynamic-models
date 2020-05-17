@@ -7,14 +7,11 @@ class ModelSchemaEditor:
         self.initial_model = initial_model
 
     def update_table(self, new_model):
-        if self.initial_model and self.has_changed(new_model):
+        if self.initial_model and self.initial_model != new_model:
             self.alter_table(new_model)
         elif not self.initial_model:
             self.create_table(new_model)
         self.initial_model = new_model
-
-    def has_changed(self, model):
-        return self.initial_model != model
 
     def create_table(self, new_model):
         with connection.schema_editor() as editor:
@@ -36,14 +33,11 @@ class FieldSchemaEditor:
         self.initial_field = initial_field
 
     def update_column(self, model, new_field):
-        if self.initial_field and self.has_changed(new_field):
+        if self.initial_field and self.initial_field != new_field:
             self.alter_column(model, new_field)
         elif not self.initial_field:
             self.add_column(model, new_field)
         self.initial_field = new_field
-
-    def has_changed(self, field):
-        return self.initial_field != field
 
     def add_column(self, model, field):
         with connection.schema_editor() as editor:

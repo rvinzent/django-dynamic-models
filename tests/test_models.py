@@ -2,14 +2,13 @@ import pytest
 from django.utils import timezone
 from dynamic_models import utils
 from dynamic_models import exceptions
-from .models import ModelSchema, FieldSchema
+from dynamic_models.models import ModelSchema, FieldSchema
 
 
 # pylint: disable=redefined-outer-name,invalid-name,unused-argument
 
 
-@pytest.mark.django_db
-class TestModelSchema:
+class ModelSchemaTest:
 
     def test_is_current_schema_checks_last_modified(self, model_schema):
         assert model_schema.is_current_schema()
@@ -67,24 +66,23 @@ class TestModelSchema:
         model_schema.add_field(field_schema)
         assert utils.db_table_has_field(table_name, column_name)
 
-    @pytest.mark.usefixtures('existing_column')
     def test_update_field_updates_column(self, model_schema, field_schema):
         table_name = model_schema.db_table
         column_name = field_schema.db_column
         assert not utils.db_field_allows_null(table_name, column_name)
-        model_schema.update_field(field_schema, null=True)
+        field_schema.null = True
+        field_schema.save()
         assert utils.db_field_allows_null(table_name, column_name)
 
-    @pytest.mark.usefixtures('existing_column')
-    def test_remove_field_drops_column(self, model_schema, field_schema):
+    def test_deleting_field_drops_column(self, model_schema, field_schema):
         table_name = model_schema.db_table
         column_name = field_schema.db_column
         assert utils.db_table_has_field(table_name, column_name)
-        model_schema.remove_field(field_schema)
+        field_schema.delete()
         assert not utils.db_table_has_field(table_name, column_name)
 
 
-class TestFieldSchema:
+class FieldSchemaTest:
 
     def test_cannot_save_with_prohibited_name(self):
         prohibited_name = '__module__'
@@ -117,7 +115,7 @@ class TestFieldSchema:
 class TestDynamicModels:
 
     @pytest.fixture
-    def dynamic_model(self, model_schema, existing_column):
+    def dynamic_model(self, model_schema, field_schema):
         return model_schema.as_model()
 
     def test_can_create(self, dynamic_model):

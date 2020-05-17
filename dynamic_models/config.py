@@ -1,12 +1,16 @@
 from django.conf import settings
 
 
+def dynamic_models_app_label():
+    return _settings().get('USE_APP_LABEL', 'dynamic_models')
+
+
 def default_fields():
     return _settings().get('DEFAULT_FIELDS', {})
 
 
-def default_max_length():
-    return _settings().get('DEFAULT_CHAR_FIELD_MAX_LENGTH', 255)
+def default_charfield_max_length():
+    return _settings().get('DEFAULT_CHARFIELD_MAX_LENGTH', 255)
 
 
 def cache_key_prefix():

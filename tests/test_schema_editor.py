@@ -34,12 +34,6 @@ class TestModelSchemaEditor:
         ModelSchemaEditor().create_table(initial_model)
         assert db_table_exists('tests_initialmodel')
 
-    def test_model_is_not_changed(self, initial_model):
-        assert not ModelSchemaEditor(initial_model).has_changed(initial_model)
-
-    def test_model_is_changed(self, initial_model, changed_model):
-        assert ModelSchemaEditor(initial_model).has_changed(changed_model)
-
     def test_update_table_creates_if_not_exists(self, initial_model):
         assert not db_table_exists('tests_initialmodel')
         ModelSchemaEditor().update_table(initial_model)
@@ -101,15 +95,6 @@ class TestFieldSchemaEditor:
         new_field = initial_model._meta.get_field('integer')
         FieldSchemaEditor().add_column(initial_model, new_field)
         assert db_table_has_field('tests_initialmodel', 'integer')
-
-    def test_field_is_changed(self, initial_model, changed_field_name_model):
-        initial_field = initial_model._meta.get_field('integer')
-        changed_field = changed_field_name_model._meta.get_field('changed')
-        assert FieldSchemaEditor(initial_field).has_changed(changed_field)
-
-    def test_field_is_not_changed(self, initial_model):
-        initial_field = initial_model._meta.get_field('integer')
-        assert not FieldSchemaEditor(initial_field).has_changed(initial_field)
 
     @pytest.mark.usefixtures('bare_table')
     def test_update_column_creates_if_not_exists(self, initial_model):
