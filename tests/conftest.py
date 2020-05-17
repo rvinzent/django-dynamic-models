@@ -13,9 +13,6 @@ MODEL_REGISTRY = utils.ModelRegistry(TEST_APP_LABEL)
 STATIC_MODELS = (ModelSchema, FieldSchema)
 
 
-def raise_on_save(*args, **kwargs):
-    raise AssertionError('save method should not be called')
-
 @pytest.fixture
 def prevent_save(monkeypatch):
     monkeypatch.setattr(ModelSchema, 'save', raise_on_save)
@@ -23,10 +20,20 @@ def prevent_save(monkeypatch):
     monkeypatch.setattr(ModelFieldSchema, 'save', raise_on_save)
 
 
+def raise_on_save(*args, **kwargs):
+    raise AssertionError('save method should not be called')
+
+
 @pytest.fixture(autouse=True)
 def cleanup_cache():
     yield
     cache.clear()
+
+
+@pytest.fixture
+def model_registry(model_schema):
+    return utils.ModelRegistry(model_schema.app_label)
+
 
 @pytest.fixture(autouse=True)
 def cleanup_registry():

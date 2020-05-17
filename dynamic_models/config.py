@@ -5,16 +5,17 @@ def default_fields():
     return _settings().get('DEFAULT_FIELDS', {})
 
 
-def default_charfield_max_length():
-    return _settings().get('DEFAULT_CHARFIELD_MAX_LENGTH', 255)
+def default_max_length():
+    return _settings().get('DEFAULT_CHAR_FIELD_MAX_LENGTH', 255)
 
 
 def cache_key_prefix():
-    return _settings().get('CACHE_KEY_PREFIX', 'dyanmic_models_')
+    return _settings().get('CACHE_KEY_PREFIX', 'dynamic_models_schema_')
 
 
 def cache_timeout():
-    return _settings().get('CACHE_TIMEOUT', 60 * 60 * 24)
+    default_timeout = 60 * 60 * 24  # 24 hours
+    return _settings().get('CACHE_TIMEOUT', default_timeout)
 
 
 def _settings():

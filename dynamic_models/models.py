@@ -66,13 +66,9 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         abstract = True
 
     def __init__(self, *args, **kwargs):
-        """
-        Initialize the schema editor with the currently registered model and the
-        initial name.
-        """
         super().__init__(*args, **kwargs)
         self._initial_name = self.name
-        initial_model = self.try_registered_model()
+        initial_model = self.get_registered_model()
         self._schema_editor = ModelSchemaEditor(initial_model)
 
     @property
@@ -88,7 +84,7 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         self.last_modified = self._modified
         self.schema_editor.update_table(self.factory.make())
 
-    def try_registered_model(self):
+    def get_registered_model(self):
         return self.registry.get_model(self.model_name)
 
     def get_fields(self):
@@ -270,7 +266,7 @@ class ModelFieldSchema(GenericModel, GenericField):
         return FieldSchemaEditor(self.initial_field)
 
     def get_latest_model_field(self):
-        latest_model = self.model_schema.try_registered_model()
+        latest_model = self.model_schema.get_registered_model()
         if latest_model:
             return self._extract_model_field(latest_model)
 

@@ -27,9 +27,8 @@ def db_field_allows_null(table_name, field_name):
     for field in table_description:
         if field.name == field_name:
             return field.null_ok
-    raise FieldDoesNotExist(
-        'field {} does not exist on table {}'.format(field_name, table_name)
-    )
+    raise FieldDoesNotExist(f'field {field_name} does not exist on table {table_name}')
+
 
 
 def _get_table_description(table_name):
@@ -48,7 +47,8 @@ def _db_cursor():
 def receiver_is_connected(receiver_name, signal, sender):
     receivers = signal._live_receivers(sender)
     receiver_strings = [
-        "{}.{}".format(r.__module__, r.__name__) for r in receivers
+        "{}.{}".format(r.__module__, r.__name__)
+        for r in receivers
     ]
     return receiver_name in receiver_strings
 
