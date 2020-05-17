@@ -1,9 +1,9 @@
 import os
 from setuptools import setup
 
-readme_file = os.path.join(os.path.dirname(__file__), 'README.md')
-with open(readme_file, 'r') as f:
-    long_description = f.read()
+README = os.path.join(os.path.dirname(__file__), 'README.md')
+with open(README, 'r') as f:
+    LONG_DESCRIPTION = f.read()
 
 setup(
     name='django-dynamic-model',
@@ -12,7 +12,7 @@ setup(
     author='Ryan Vinzent',
     author_email='rvinzent217@hotmail.com',
     description='Allow dynamic creation and updates to database schema at runtime.',
-    long_description=long_description,
+    long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
     license='MIT',
     packages=['dynamic_models', 'dynamic_models.migrations'],

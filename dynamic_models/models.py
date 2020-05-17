@@ -1,122 +1,58 @@
-"""Provides the base models of dynamic model schema classes.
-
-Abstract models should be subclassed to provide extra functionality, but they
-are perfectly usable without adding any additional fields.
-
-`AbstractModelSchema` -- base model that defines dynamic models
-`AbstractFieldSchema` -- base model for defining fields to use on dynamic models
-`DynamicModelField`   -- through model for attaching fields to dynamic models
-"""
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
-from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.functional import cached_property
-from django.core.exceptions import FieldDoesNotExist
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
 
-from . import utils
-from . import exceptions
-from .schema import ModelSchemaEditor, FieldSchemaEditor
-from .factory import ModelFactory, FieldFactory
+from dynamic_models import config
+from dynamic_models.factory import ModelFactory, FieldFactory
+from dynamic_models.exceptions import NullFieldChangedError, InvalidFieldNameError
+from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
+from dynamic_models.utils import LastModifiedCache, ModelRegistry
 
 
-LAST_MODIFIED_CACHE = utils.LastModifiedCache()
-
-
-class LastModifiedBase(models.Model):
+class ModelSchema(models.Model):
+    name = models.CharField(max_length=32, unique=True)
     _modified = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        abstract = True
-
-    def is_current_schema(self):
-        return self._modified >= self.last_modified
-
-    @property
-    def last_modified(self):
-        return LAST_MODIFIED_CACHE.get(self)
-
-    @last_modified.setter
-    def last_modified(self, timestamp):
-        LAST_MODIFIED_CACHE.set(self, timestamp)
-
-    @last_modified.deleter
-    def last_modified(self):
-        LAST_MODIFIED_CACHE.delete(self)
-
-
-class ModelSchemaBase(models.base.ModelBase):
-    def __new__(cls, name, bases, attrs, **kwargs):
-        model = super().__new__(cls, name, bases, attrs, **kwargs)
-        if not model._meta.abstract and issubclass(model, AbstractModelSchema):
-            models.signals.pre_delete.connect(drop_model_table, sender=model)
-        return model
-
-
-def drop_model_table(sender, instance, **kwargs): # pylint: disable=unused-argument
-    instance.destroy_model()
-
-
-class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
-    name = models.CharField(max_length=32, unique=True)
-
-    class Meta:
-        abstract = True
+    _cache = LastModifiedCache()
 
     def __init__(self, *args, **kwargs):
-        """
-        Initialize the schema editor with the currently registered model and the
-        initial name.
-        """
         super().__init__(*args, **kwargs)
+        self._registry = ModelRegistry(self.app_label)
         self._initial_name = self.name
-        initial_model = self.try_registered_model()
+        initial_model = self.get_registered_model()
         self._schema_editor = ModelSchemaEditor(initial_model)
 
-    @property
-    def schema_editor(self):
-        return self._schema_editor
-
-    @cached_property
-    def registry(self):
-        return utils.ModelRegistry(self.app_label)
 
     def save(self, **kwargs):
         super().save(**kwargs)
         self.last_modified = self._modified
-        self.schema_editor.update_table(self.factory.make())
+        self._schema_editor.update_table(self._factory.make_model())
 
-    def try_registered_model(self):
-        return self.registry.try_model(self.model_name)
+    def delete(self, **kwargs):
+        self._schema_editor.drop_table(self.as_model())
+        self._factory.destroy_model()
+        del self.last_modified
+        super().delete(**kwargs)
 
-    def get_fields(self):
-        return ModelFieldSchema.objects.for_model(self)
+    @property
+    def last_modified(self):
+        return self._cache.get(self)
 
-    def get_field_for_schema(self, field_schema):
-        field_ct = ContentType.objects.get_for_model(field_schema)
-        return self.get_fields().get(
-            field_content_type=field_ct,
-            field_id=field_schema.id
-        )
+    @last_modified.setter
+    def last_modified(self, timestamp):
+        self._cache.set(self, timestamp)
 
-    def add_field(self, field_schema, **options):
-        return ModelFieldSchema.objects.create(
-            model_schema=self,
-            field_schema=field_schema,
-            **options
-        )
+    @last_modified.deleter
+    def last_modified(self):
+        self._cache.delete(self)
 
-    def update_field(self, field_schema, **options):
-        field_to_update = self.get_field_for_schema(field_schema)
-        for attr, value in options.items():
-            setattr(field_to_update, attr, value)
-        field_to_update.save()
-        return field_to_update
+    def get_registered_model(self):
+        return self._registry.get_model(self.model_name)
 
-    def remove_field(self, field_schema):
-        self.get_field_for_schema(field_schema).delete()
+    def is_current_schema(self):
+        return self._modified >= self.last_modified
 
     def is_current_model(self, model):
         if model._schema.pk != self.pk:
@@ -124,12 +60,12 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         return model._declared >= self.last_modified
 
     @property
-    def factory(self):
+    def _factory(self):
         return ModelFactory(self)
 
     @property
     def app_label(self):
-        return self.__class__._meta.app_label
+        return config.dynamic_models_app_label()
 
     @property
     def model_name(self):
@@ -149,188 +85,100 @@ class AbstractModelSchema(LastModifiedBase, metaclass=ModelSchemaBase):
         return '_'.join(parts)
 
     def as_model(self):
-        return self.factory.get_model()
-
-    def destroy_model(self):
-        self.schema_editor.drop_table(self.as_model())
-        self.factory.destroy()
-        del self.last_modified
+        return self._factory.get_model()
 
 
-class AbstractFieldSchema(models.Model):
-    PROHIBITED_NAMES = ('__module__', '_schema', '_declared')
-    MAX_LENGTH_DATA_TYPES = ('character',)
+class FieldSchema(models.Model):
+    _PROHIBITED_NAMES = ('__module__', '_schema', '_declared')
+    _MAX_LENGTH_DATA_TYPES = ('character',)
 
-    name = models.CharField(max_length=16)
+    name = models.CharField(max_length=63)
+    model_schema = models.ForeignKey(
+        ModelSchema,
+        on_delete=models.CASCADE,
+        related_name='fields'
+    )
     data_type = models.CharField(
         max_length=16,
-        choices=FieldFactory.data_types(),
+        choices=FieldFactory.data_type_choices(),
         editable=False
     )
-
-    class Meta:
-        abstract = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._initial_name = self.name
-
-    def save(self, **kwargs):
-        self.validate()
-        super().save(**kwargs)
-        self.update_last_modified()
-
-    def validate(self):
-        if self.name in self.get_prohibited_names():
-            raise exceptions.InvalidFieldNameError(
-                '{} is not a valid field name'.format(self.name)
-            )
-
-    @classmethod
-    def get_prohibited_names(cls):
-        return cls.PROHIBITED_NAMES
-
-    @classmethod
-    def get_data_types(cls):
-        return [dt[0] for dt in FieldFactory.data_types()]
-
-    @property
-    def db_column(self):
-        return slugify(self.name).replace('-', '_')
-
-    def requires_max_length(self):
-        return self.data_type in self.__class__.MAX_LENGTH_DATA_TYPES
-
-    def get_related_model_schema(self):
-        queryset = ModelFieldSchema.objects.for_field(self).prefetch_related('model_schema')
-        return (field.model_schema for field in queryset)
-
-    def update_last_modified(self):
-        now = timezone.now()
-        for model_schema in self.get_related_model_schema():
-            model_schema.last_modified = now
-
-
-class ModelFieldSchemaManager(models.Manager):
-    def for_model(self, model_schema):
-        return self.get_queryset().filter(
-            model_content_type=ContentType.objects.get_for_model(model_schema),
-            model_id=model_schema.id
-        )
-
-    def for_field(self, field_schema):
-        return self.get_queryset().filter(
-            field_content_type=ContentType.objects.get_for_model(field_schema),
-            field_id=field_schema.id
-        )
-
-
-class GenericModel(models.Model):
-    model_content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        related_name='model_field_columns'
-    )
-    model_id = models.PositiveIntegerField()
-    model_schema = GenericForeignKey('model_content_type', 'model_id')
-
-    class Meta:
-        abstract = True
-
-
-class GenericField(models.Model):
-    field_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    field_id = models.PositiveIntegerField()
-    field_schema = GenericForeignKey('field_content_type', 'field_id')
-
-    class Meta:
-        abstract = True
-
-
-class ModelFieldSchema(GenericModel, GenericField):
-
-    objects = ModelFieldSchemaManager()
-
     null = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
     class Meta:
         unique_together = (
-            'model_content_type', 'model_id', 'field_content_type', 'field_id'
-        ),
+            ('name', 'model_schema'),
+        )
 
-    def  __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._initial_name = self.name
         self._initial_null = self.null
-        self.initial_field = self.get_latest_model_field()
-
-    @property
-    def schema_editor(self):
-        return FieldSchemaEditor(self.initial_field)
-
-    def get_latest_model_field(self):
-        latest_model = self.model_schema.try_registered_model()
-        if latest_model:
-            return self._extract_model_field(latest_model)
-
-    def _extract_model_field(self, model):
-        try:
-            return model._meta.get_field(self.db_column)
-        except FieldDoesNotExist:
-            pass
-
-    @property
-    def data_type(self):
-        return self.field_schema.data_type
-
-    @property
-    def db_column(self):
-        return self.field_schema.db_column
+        self._initial_field = self.get_registered_model_field()
+        self._schema_editor = FieldSchemaEditor(self._initial_field)
 
     def save(self, **kwargs):
         self.validate()
         super().save(**kwargs)
         self.update_last_modified()
-        self.update_column()
+        model, field = self._get_model_with_field()
+        self._schema_editor.update_column(model, field)
+
+    def delete(self, **kwargs):
+        model, field = self._get_model_with_field()
+        self._schema_editor.drop_column(model, field)
+        self.update_last_modified()
+        super().delete(**kwargs)
 
     def validate(self):
         if self._initial_null and not self.null:
-            raise exceptions.NullFieldChangedError(
-                "{} cannot be changed to NOT NULL".format(self.db_column)
-            )
+            raise NullFieldChangedError(f"Cannot change NULL field '{self.name}' to NOT NULL")
+
+        if self.name in self.get_prohibited_names():
+            raise InvalidFieldNameError(f'{self.name} is not a valid field name')
+
+    def get_registered_model_field(self):
+        latest_model = self.model_schema.get_registered_model()
+        if latest_model and self.name:
+            try:
+                return latest_model._meta.get_field(self.name)
+            except FieldDoesNotExist:
+                pass
+
+    @classmethod
+    def get_prohibited_names(cls):
+        # TODO: return prohbited names based on backend
+        return cls._PROHIBITED_NAMES
+
+    @classmethod
+    def get_data_types(cls):
+        return FieldFactory.get_data_types()
+
+    @property
+    def db_column(self):
+        return slugify(self.name).replace('-', '_')
+
+    def requires_max_length(self):
+        return self.data_type in self.__class__._MAX_LENGTH_DATA_TYPES
 
     def update_last_modified(self):
         self.model_schema.last_modified = timezone.now()
 
-    def update_column(self):
-        self.schema_editor.update_column(*self._get_model_with_field())
-
-    def drop_column(self):
-        self.schema_editor.drop_column(*self._get_model_with_field())
+    def get_options(self):
+        """
+        Get a dictionary of kwargs to be passed to the Django field constructor
+        """
+        options = {'null': self.null, 'unique': self.unique}
+        if self.requires_max_length():
+            options['max_length'] = self.max_length or config.default_charfield_max_length()
+        return options
 
     def _get_model_with_field(self):
         model = self.model_schema.as_model()
-        return model, self._extract_model_field(model)
-
-    def get_options(self):
-        options = {'null': self.null, 'unique': self.unique}
-        options.update(self._maybe_max_length())
-        return options
-
-    def _maybe_max_length(self):
-        if self.field_schema.requires_max_length():
-            self._ensure_max_length()
-            return {'max_length': self.max_length}
-        return {}
-
-    def _ensure_max_length(self):
-        if not self.max_length:
-            self.max_length = utils.default_max_length()
-            self.save()
-
-
-@receiver(models.signals.pre_delete, sender=ModelFieldSchema)
-def drop_table_column(sender, instance, **kwargs): # pylint: disable=unused-argument
-    instance.drop_column()
-    instance.update_last_modified()
+        try:
+            field = model._meta.get_field(self.db_column)
+        except FieldDoesNotExist:
+            field = None
+        return model, field

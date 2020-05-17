@@ -1,32 +1,27 @@
 import pytest
 from django.apps import apps
 from django.core.cache import cache
-from dynamic_models import utils
-from dynamic_models.models import ModelFieldSchema
-from .models import ModelSchema, FieldSchema
+from dynamic_models.utils import ModelRegistry
+from dynamic_models.models import ModelSchema, FieldSchema
 
 # pylint: disable=unused-argument,invalid-name
 
 
-TEST_APP_LABEL = 'tests'
-MODEL_REGISTRY = utils.ModelRegistry(TEST_APP_LABEL)
+TEST_APP_LABEL = 'dynamic_models'
+MODEL_REGISTRY = ModelRegistry(TEST_APP_LABEL)
 STATIC_MODELS = (ModelSchema, FieldSchema)
-
-
-def raise_on_save(*args, **kwargs):
-    raise AssertionError('save method should not be called')
-
-@pytest.fixture
-def prevent_save(monkeypatch):
-    monkeypatch.setattr(ModelSchema, 'save', raise_on_save)
-    monkeypatch.setattr(FieldSchema, 'save', raise_on_save)
-    monkeypatch.setattr(ModelFieldSchema, 'save', raise_on_save)
 
 
 @pytest.fixture(autouse=True)
 def cleanup_cache():
     yield
     cache.clear()
+
+
+@pytest.fixture
+def model_registry(model_schema):
+    return ModelRegistry(model_schema.app_label)
+
 
 @pytest.fixture(autouse=True)
 def cleanup_registry():
@@ -37,10 +32,37 @@ def cleanup_registry():
     try:
         yield
     finally:
-        test_app_config = apps.get_app_config(TEST_APP_LABEL)
-        registered_models = test_app_config.get_models()
-        models_to_remove = [
-            model for model in registered_models if model not in STATIC_MODELS
-        ]
-        for model in models_to_remove:
-            MODEL_REGISTRY.unregister_model(model.__name__)
+        app_config = apps.get_app_config(TEST_APP_LABEL)
+        registered_models = app_config.get_models()
+        apps.all_models[TEST_APP_LABEL].clear()
+        apps.register_model(TEST_APP_LABEL, ModelSchema)
+        apps.register_model(TEST_APP_LABEL, FieldSchema)
+
+@pytest.fixture
+def model_registry(model_schema):
+    return ModelRegistry(model_schema.app_label)
+
+
+@pytest.fixture
+def unsaved_model_schema(db):
+    return ModelSchema(name='unsaved model')
+
+
+@pytest.fixture
+def model_schema(db):
+    return ModelSchema.objects.create(name='simple model')
+
+
+@pytest.fixture
+def another_model_schema(db):
+    return ModelSchema.objects.create(name='another model')
+
+
+@pytest.fixture
+def field_schema(db, model_schema):
+    return FieldSchema.objects.create(
+        name='field',
+        data_type='integer',
+        model_schema=model_schema
+    )
+

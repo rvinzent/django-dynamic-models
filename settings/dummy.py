@@ -2,7 +2,7 @@
 Dummy database for generating app migrations.
 """
 # pylint: disable=W0614
-from .base import *
+from settings.base import *
 
 DATABASES = {
     'default': {

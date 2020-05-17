@@ -8,8 +8,9 @@ SECRET_KEY = 'supersecret'
 INSTALLED_APPS = [
     'tests',
     'dynamic_models',
-    'django.contrib.contenttypes',
 ]
+
+USE_TZ = True
 
 DATABASES = {
     'default': {
