@@ -97,7 +97,7 @@ class FieldFactory:
 
     @classmethod
     def data_type_choices(cls):
-        return [(dt, dt) for dt in cls.DATA_TYPES]
+        return [(dt, dt) for dt in cls.get_data_types()]
 
     @classmethod
     def get_data_types(cls):

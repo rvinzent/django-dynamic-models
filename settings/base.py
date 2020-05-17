@@ -10,6 +10,8 @@ INSTALLED_APPS = [
     'dynamic_models',
 ]
 
+USE_TZ = True
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.dummy'

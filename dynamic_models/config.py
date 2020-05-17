@@ -1,8 +1,9 @@
 from django.conf import settings
 
+from dynamic_models.apps import DynamicModelsConfig
 
 def dynamic_models_app_label():
-    return _settings().get('USE_APP_LABEL', 'dynamic_models')
+    return _settings().get('USE_APP_LABEL', DynamicModelsConfig.name)
 
 
 def default_fields():
