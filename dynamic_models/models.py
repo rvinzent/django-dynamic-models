@@ -107,6 +107,11 @@ class FieldSchema(models.Model):
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
+    class Meta:
+        unique_together = (
+            ('name', 'model_schema'),
+        )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._initial_name = self.name
