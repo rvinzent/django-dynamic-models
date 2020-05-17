@@ -34,12 +34,9 @@ def cleanup_registry():
     finally:
         app_config = apps.get_app_config(TEST_APP_LABEL)
         registered_models = app_config.get_models()
-        models_to_remove = [
-            model for model in registered_models if model not in STATIC_MODELS
-        ]
-        for model in models_to_remove:
-            MODEL_REGISTRY.unregister_model(model.__name__)
-
+        apps.all_models[TEST_APP_LABEL].clear()
+        apps.register_model(TEST_APP_LABEL, ModelSchema)
+        apps.register_model(TEST_APP_LABEL, FieldSchema)
 
 @pytest.fixture
 def model_registry(model_schema):

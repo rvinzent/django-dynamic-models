@@ -110,6 +110,7 @@ class FieldSchema(models.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._initial_name = self.name
+        self._initial_null = self.null
         self._initial_field = self.get_registered_model_field()
         self._schema_editor = FieldSchemaEditor(self._initial_field)
 
@@ -127,6 +128,9 @@ class FieldSchema(models.Model):
         super().delete(**kwargs)
 
     def validate(self):
+        if self._initial_null and not self.null:
+            raise NullFieldChangedError(f"Cannot change NULL field '{self.name}' to NOT NULL")
+
         if self.name in self.get_prohibited_names():
             raise InvalidFieldNameError(f'{self.name} is not a valid field name')
 
@@ -163,7 +167,7 @@ class FieldSchema(models.Model):
         """
         options = {'null': self.null, 'unique': self.unique}
         if self.requires_max_length():
-            options['max_length'] = self.max_length or config.default_max_length()
+            options['max_length'] = self.max_length or config.default_charfield_max_length()
         return options
 
     def _get_model_with_field(self):

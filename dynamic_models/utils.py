@@ -13,7 +13,8 @@ from dynamic_models import config
 def db_table_exists(table_name):
     """Checks if the table name exists in the database."""
     with _db_cursor() as c:
-        return table_name in connection.introspection.table_names(c, table_name)
+        table_names = connection.introspection.table_names(c)
+        return table_name in table_names
 
 
 def db_table_has_field(table_name, field_name):
