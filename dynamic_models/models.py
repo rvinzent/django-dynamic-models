@@ -2,7 +2,6 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.functional import cached_property
 
 from dynamic_models import config
 from dynamic_models.factory import ModelFactory, FieldFactory
@@ -23,7 +22,6 @@ class ModelSchema(models.Model):
         self._initial_name = self.name
         initial_model = self.get_registered_model()
         self._schema_editor = ModelSchemaEditor(initial_model)
-
 
     def save(self, **kwargs):
         super().save(**kwargs)
@@ -77,40 +75,34 @@ class ModelSchema(models.Model):
 
     @classmethod
     def get_model_name(cls, name):
-        return name.title().replace(' ', '')
+        return name.title().replace(" ", "")
 
     @property
     def db_table(self):
-        parts = (self.app_label, slugify(self.name).replace('-', '_'))
-        return '_'.join(parts)
+        parts = (self.app_label, slugify(self.name).replace("-", "_"))
+        return "_".join(parts)
 
     def as_model(self):
         return self._factory.get_model()
 
 
 class FieldSchema(models.Model):
-    _PROHIBITED_NAMES = ('__module__', '_schema', '_declared')
-    _MAX_LENGTH_DATA_TYPES = ('character',)
+    _PROHIBITED_NAMES = ("__module__", "_schema", "_declared")
+    _MAX_LENGTH_DATA_TYPES = ("character",)
 
     name = models.CharField(max_length=63)
     model_schema = models.ForeignKey(
-        ModelSchema,
-        on_delete=models.CASCADE,
-        related_name='fields'
+        ModelSchema, on_delete=models.CASCADE, related_name="fields"
     )
     data_type = models.CharField(
-        max_length=16,
-        choices=FieldFactory.data_type_choices(),
-        editable=False
+        max_length=16, choices=FieldFactory.data_type_choices(), editable=False
     )
     null = models.BooleanField(default=False)
     unique = models.BooleanField(default=False)
     max_length = models.PositiveIntegerField(null=True)
 
     class Meta:
-        unique_together = (
-            ('name', 'model_schema'),
-        )
+        unique_together = (("name", "model_schema"),)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -134,10 +126,12 @@ class FieldSchema(models.Model):
 
     def validate(self):
         if self._initial_null and not self.null:
-            raise NullFieldChangedError(f"Cannot change NULL field '{self.name}' to NOT NULL")
+            raise NullFieldChangedError(
+                f"Cannot change NULL field '{self.name}' to NOT NULL"
+            )
 
         if self.name in self.get_prohibited_names():
-            raise InvalidFieldNameError(f'{self.name} is not a valid field name')
+            raise InvalidFieldNameError(f"{self.name} is not a valid field name")
 
     def get_registered_model_field(self):
         latest_model = self.model_schema.get_registered_model()
@@ -158,7 +152,7 @@ class FieldSchema(models.Model):
 
     @property
     def db_column(self):
-        return slugify(self.name).replace('-', '_')
+        return slugify(self.name).replace("-", "_")
 
     def requires_max_length(self):
         return self.data_type in self.__class__._MAX_LENGTH_DATA_TYPES
@@ -170,9 +164,11 @@ class FieldSchema(models.Model):
         """
         Get a dictionary of kwargs to be passed to the Django field constructor
         """
-        options = {'null': self.null, 'unique': self.unique}
+        options = {"null": self.null, "unique": self.unique}
         if self.requires_max_length():
-            options['max_length'] = self.max_length or config.default_charfield_max_length()
+            options["max_length"] = (
+                self.max_length or config.default_charfield_max_length()
+            )
         return options
 
     def _get_model_with_field(self):

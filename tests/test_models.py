@@ -1,15 +1,15 @@
 import pytest
 from django.utils import timezone
 from dynamic_models import utils
-from dynamic_models.exceptions import InvalidFieldNameError, NullFieldChangedError, OutdatedModelError
-from dynamic_models.models import ModelSchema, FieldSchema
-
-
-# pylint: disable=redefined-outer-name,invalid-name,unused-argument
+from dynamic_models.exceptions import (
+    InvalidFieldNameError,
+    NullFieldChangedError,
+    OutdatedModelError,
+)
+from dynamic_models.models import FieldSchema
 
 
 class TestModelSchema:
-
     def test_is_current_schema_checks_last_modified(self, model_schema):
         assert model_schema.is_current_schema()
         model_schema.last_modified = timezone.now()
@@ -34,20 +34,20 @@ class TestModelSchema:
         assert utils.db_table_exists(table_name)
 
     def test_model_registry_is_updated_on_update(self, model_registry, model_schema):
-        assert model_registry.is_registered('SimpleModel')
-        assert not model_registry.is_registered('NewName')
-        model_schema.name = 'new name'
+        assert model_registry.is_registered("SimpleModel")
+        assert not model_registry.is_registered("NewName")
+        model_schema.name = "new name"
         model_schema.save()
-        assert not model_registry.is_registered('SimpleModel')
-        assert model_registry.is_registered('NewName')
+        assert not model_registry.is_registered("SimpleModel")
+        assert model_registry.is_registered("NewName")
 
     def test_model_table_is_updated_on_update(self, model_schema):
-        assert utils.db_table_exists('dynamic_models_simple_model')
-        assert not utils.db_table_exists('dynamic_models_new_name')
-        model_schema.name = 'new name'
+        assert utils.db_table_exists("dynamic_models_simple_model")
+        assert not utils.db_table_exists("dynamic_models_new_name")
+        model_schema.name = "new name"
         model_schema.save()
-        assert utils.db_table_exists('dynamic_models_new_name')
-        assert not utils.db_table_exists('dynamic_models_simple_model')
+        assert utils.db_table_exists("dynamic_models_new_name")
+        assert not utils.db_table_exists("dynamic_models_simple_model")
 
     def test_model_table_is_dropped_on_delete(self, model_schema):
         assert utils.db_table_exists(model_schema.db_table)
@@ -61,9 +61,7 @@ class TestModelSchema:
 
     def test_add_field_creates_column(self, model_schema):
         field_schema = FieldSchema(
-            name='special',
-            data_type='integer',
-            model_schema=model_schema
+            name="special", data_type="integer", model_schema=model_schema
         )
         table_name = model_schema.db_table
         column_name = field_schema.db_column
@@ -88,20 +86,17 @@ class TestModelSchema:
 
 
 class TestFieldSchema:
-
     def test_cannot_save_with_prohibited_name(self, model_schema):
-        prohibited_name = '__module__'
+        prohibited_name = "__module__"
         with pytest.raises(InvalidFieldNameError):
             FieldSchema.objects.create(
-                name=prohibited_name,
-                data_type='integer',
-                model_schema=model_schema
+                name=prohibited_name, data_type="integer", model_schema=model_schema
             )
 
     def test_cannot_change_null_to_not_null(self, model_schema):
         null_field = FieldSchema.objects.create(
-            name='field',
-            data_type='integer',
+            name="field",
+            data_type="integer",
             model_schema=model_schema,
             null=True,
         )
@@ -109,7 +104,9 @@ class TestFieldSchema:
             null_field.null = False
             null_field.save()
 
-    def test_related_model_schema_notified_on_field_update(self, model_schema, field_schema):
+    def test_related_model_schema_notified_on_field_update(
+        self, model_schema, field_schema
+    ):
         model = model_schema.as_model()
         assert model_schema.is_current_model(model)
         field_schema.update_last_modified()
@@ -118,7 +115,6 @@ class TestFieldSchema:
 
 @pytest.mark.django_db
 class TestDynamicModels:
-
     @pytest.fixture
     def dynamic_model(self, model_schema, field_schema):
         return model_schema.as_model()
@@ -143,7 +139,7 @@ class TestDynamicModels:
             dynamic_model.objects.get(pk=obj.pk)
 
     def test_cannot_save_with_outdated_model(self, model_schema, dynamic_model):
-        model_schema.name = 'new name'
+        model_schema.name = "new name"
         model_schema.save()
         with pytest.raises(OutdatedModelError):
             dynamic_model.objects.create(field=4)

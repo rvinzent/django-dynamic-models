@@ -1,11 +1,3 @@
-"""
-Dummy database for generating app migrations.
-"""
-# pylint: disable=W0614
-from settings.base import *
+from settings.base import *  # noqa
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.dummy'
-    }
-}
+DATABASES = {"default": {"ENGINE": "django.db.backends.dummy"}}

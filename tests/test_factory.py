@@ -1,19 +1,14 @@
 import pytest
 from django.db import models
 from dynamic_models.factory import ModelFactory, FieldFactory
-from dynamic_models.utils import ModelRegistry, receiver_is_connected
-from dynamic_models.models import ModelSchema, FieldSchema
-
-# pylint: disable=redefined-outer-name,invalid-name,unused-argument
+from dynamic_models.utils import receiver_is_connected
+from dynamic_models.models import FieldSchema
 
 
 class TestModelFactory:
-
     def schema_checker_is_connected(self, model):
         return receiver_is_connected(
-            'dynamic_models.factory.check_model_schema',
-            models.signals.pre_save,
-            model
+            "dynamic_models.factory.check_model_schema", models.signals.pre_save, model
         )
 
     def test_get_model_makes_if_not_exists(self, model_registry, unsaved_model_schema):
@@ -21,7 +16,9 @@ class TestModelFactory:
         ModelFactory(unsaved_model_schema).get_model()
         assert model_registry.is_registered(unsaved_model_schema.model_name)
 
-    def test_get_model_returns_registered_if_exists(self, monkeypatch, model_registry, model_schema):
+    def test_get_model_returns_registered_if_exists(
+        self, monkeypatch, model_registry, model_schema
+    ):
         factory = ModelFactory(model_schema)
         model = factory.make_model()
         assert model_registry.is_registered(model_schema.model_name)
@@ -29,7 +26,7 @@ class TestModelFactory:
 
     def test_model_has_base_attributes(self, model_schema):
         model = ModelFactory(model_schema).make_model()
-        for attr in ('_schema', '_declared', '__module__'):
+        for attr in ("_schema", "_declared", "__module__"):
             assert hasattr(model, attr)
 
     def test_model_has_field_with_field_on_schema(self, model_schema, field_schema):
@@ -66,16 +63,20 @@ class TestModelFactory:
 
 
 class TestFieldFactory:
-
-    @pytest.mark.parametrize('data_type, expected_class, options', [
-        ('integer', models.IntegerField, {}),
-        ('character', models.CharField, {'max_length': 255}),
-        ('text', models.TextField, {}),
-        ('float', models.FloatField, {}),
-        ('boolean', models.BooleanField, {})
-    ])
+    @pytest.mark.parametrize(
+        "data_type, expected_class, options",
+        [
+            ("integer", models.IntegerField, {}),
+            ("character", models.CharField, {"max_length": 255}),
+            ("text", models.TextField, {}),
+            ("float", models.FloatField, {}),
+            ("boolean", models.BooleanField, {}),
+        ],
+    )
     def test_make_field(self, data_type, expected_class, options, model_schema):
-        field_schema = FieldSchema(name='field', data_type=data_type, model_schema=model_schema)
+        field_schema = FieldSchema(
+            name="field", data_type=data_type, model_schema=model_schema
+        )
         field = FieldFactory(field_schema).make_field()
         assert isinstance(field, expected_class)
 
