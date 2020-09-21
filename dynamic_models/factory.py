@@ -2,7 +2,7 @@ from django.db import models
 from django.utils import timezone
 
 from dynamic_models import config
-from dynamic_models.exceptions import OutdatedModelError
+from dynamic_models.exceptions import OutdatedModelError, UnsavedSchemaError
 from dynamic_models.utils import ModelRegistry, is_current_model
 
 
@@ -18,6 +18,11 @@ class ModelFactory:
         return self.make_model()
 
     def make_model(self):
+        if not self.schema.pk:
+            raise UnsavedSchemaError(
+                f"Cannot create a model for schema '{self.schema.name}'"
+                " because it has not been saved to the database"
+            )
         self.unregister_model()
         model = type(self.schema.model_name, (models.Model,), self.get_properties())
         _connect_schema_checker(model)

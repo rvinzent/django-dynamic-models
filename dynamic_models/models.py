@@ -20,9 +20,9 @@ class ModelSchema(models.Model):
         self._schema_editor = ModelSchemaEditor(initial_model)
 
     def save(self, **kwargs):
-        cache.clear_last_modified(self.initial_model_name)
-        cache.update_last_modified(self.model_name)
         super().save(**kwargs)
+        cache.update_last_modified(self.model_name)
+        cache.update_last_modified(self.initial_model_name)
         self._schema_editor.update_table(self._factory.make_model())
         self._initial_name = self.name
 

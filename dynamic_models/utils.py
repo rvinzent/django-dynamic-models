@@ -45,8 +45,10 @@ def receiver_is_connected(receiver_name, signal, sender):
 
 
 def is_current_model(model):
+    # if there is no cache entry, the model schema has not been updated since
+    # restarting the server and the current schema is fine
     last_modified = cache.get_last_modified(model.__name__)
-    return last_modified is not None and last_modified < model._declared
+    return last_modified is None or last_modified < model._declared
 
 
 class ModelRegistry:
