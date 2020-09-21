@@ -2,6 +2,8 @@
 
 All exceptions inherit from a `DynamicModelError` base class.
 """
+
+
 class DynamicModelError(Exception):
     """Base exception for use in dynamic models."""
 
