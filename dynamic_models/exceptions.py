@@ -18,3 +18,10 @@ class NullFieldChangedError(DynamicModelError):
 
 class InvalidFieldNameError(DynamicModelError):
     """Raised when a field name is invalid."""
+
+
+class UnsavedSchemaError(DynamicModelError):
+    """
+    Raised when a model schema has not been saved to the db and a dynamic model
+    is attempted to be created.
+    """
