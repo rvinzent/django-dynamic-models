@@ -11,10 +11,11 @@ class TestModelFactory:
             "dynamic_models.factory.check_model_schema", models.signals.pre_save, model
         )
 
-    def test_get_model_makes_if_not_exists(self, model_registry, unsaved_model_schema):
-        assert not model_registry.is_registered(unsaved_model_schema.model_name)
-        ModelFactory(unsaved_model_schema).get_model()
-        assert model_registry.is_registered(unsaved_model_schema.model_name)
+    def test_get_model_makes_if_not_exists(self, model_registry, model_schema):
+        model_registry.unregister_model(model_schema.model_name)
+        assert not model_registry.is_registered(model_schema.model_name)
+        ModelFactory(model_schema).get_model()
+        assert model_registry.is_registered(model_schema.model_name)
 
     def test_get_model_returns_registered_if_exists(
         self, monkeypatch, model_registry, model_schema
