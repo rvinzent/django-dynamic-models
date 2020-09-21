@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from dynamic_models import config
 from dynamic_models.exceptions import OutdatedModelError
-from dynamic_models.utils import ModelRegistry
+from dynamic_models.utils import ModelRegistry, is_current_model
 
 
 class ModelFactory:
@@ -13,7 +13,7 @@ class ModelFactory:
 
     def get_model(self):
         registered = self.get_registered_model()
-        if registered and self.schema.is_current_model(registered):
+        if registered and is_current_model(registered):
             return registered
         return self.make_model()
 
@@ -49,7 +49,6 @@ class ModelFactory:
         return {
             "__module__": "{}.models".format(self.schema.app_label),
             "_declared": timezone.now(),
-            "_schema": self.schema,
             "Meta": self._model_meta(),
         }
 
@@ -106,7 +105,7 @@ def check_model_schema(sender, instance, **kwargs):
     Called on pre_save to guard against the possibility of a model schema change
     between instance instantiation and record save.
     """
-    if not sender._schema.is_current_model(sender):
+    if not is_current_model(sender):
         raise OutdatedModelError(f"model {sender.__name__} has changed")
 
 

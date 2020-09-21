@@ -26,7 +26,7 @@ class TestModelFactory:
 
     def test_model_has_base_attributes(self, model_schema):
         model = ModelFactory(model_schema).make_model()
-        for attr in ("_schema", "_declared", "__module__"):
+        for attr in ("_declared", "__module__"):
             assert hasattr(model, attr)
 
     def test_model_has_field_with_field_on_schema(self, model_schema, field_schema):
@@ -74,9 +74,7 @@ class TestFieldFactory:
         ],
     )
     def test_make_field(self, data_type, expected_class, options, model_schema):
-        field_schema = FieldSchema(
-            name="field", data_type=data_type, model_schema=model_schema
-        )
+        field_schema = FieldSchema(name="field", data_type=data_type, model_schema=model_schema)
         field = FieldFactory(field_schema).make_field()
         assert isinstance(field, expected_class)
 

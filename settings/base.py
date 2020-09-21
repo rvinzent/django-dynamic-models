@@ -14,4 +14,6 @@ USE_TZ = True
 
 DATABASES = {"default": {"ENGINE": "django.db.backends.dummy"}}
 
-CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+}

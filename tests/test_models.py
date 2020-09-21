@@ -1,6 +1,5 @@
 import pytest
-from django.utils import timezone
-from dynamic_models import utils
+from dynamic_models import cache, utils
 from dynamic_models.exceptions import (
     InvalidFieldNameError,
     NullFieldChangedError,
@@ -10,17 +9,11 @@ from dynamic_models.models import FieldSchema
 
 
 class TestModelSchema:
-    def test_is_current_schema_checks_last_modified(self, model_schema):
-        assert model_schema.is_current_schema()
-        model_schema.last_modified = timezone.now()
-        assert not model_schema.is_current_schema()
-
-    def test_is_current_model(self, model_schema, another_model_schema):
+    def test_is_current_model(self, model_schema):
         model = model_schema.as_model()
-        another_model = another_model_schema.as_model()
-        assert model_schema.is_current_model(model)
-        with pytest.raises(ValueError):
-            model_schema.is_current_model(another_model)
+        assert utils.is_current_model(model)
+        cache.update_last_modified(model_schema.model_name)
+        assert not utils.is_current_model(model)
 
     def test_model_is_registered_on_create(self, model_registry, unsaved_model_schema):
         assert not model_registry.is_registered(unsaved_model_schema.model_name)
@@ -60,9 +53,7 @@ class TestModelSchema:
         assert not model_registry.is_registered(model_schema.model_name)
 
     def test_add_field_creates_column(self, model_schema):
-        field_schema = FieldSchema(
-            name="special", data_type="integer", model_schema=model_schema
-        )
+        field_schema = FieldSchema(name="special", data_type="integer", model_schema=model_schema)
         table_name = model_schema.db_table
         column_name = field_schema.db_column
         assert not utils.db_table_has_field(table_name, column_name)
@@ -104,21 +95,20 @@ class TestFieldSchema:
             null_field.null = False
             null_field.save()
 
-    def test_related_model_schema_notified_on_field_update(
-        self, model_schema, field_schema
-    ):
+    def test_related_model_schema_notified_on_field_update(self, model_schema, field_schema):
         model = model_schema.as_model()
-        assert model_schema.is_current_model(model)
+        assert utils.is_current_model(model)
         field_schema.update_last_modified()
-        assert not model_schema.is_current_model(model)
+        assert not utils.is_current_model(model)
+
+
+@pytest.fixture
+def dynamic_model(model_schema, field_schema):
+    return model_schema.as_model()
 
 
 @pytest.mark.django_db
 class TestDynamicModels:
-    @pytest.fixture
-    def dynamic_model(self, model_schema, field_schema):
-        return model_schema.as_model()
-
     def test_can_create(self, dynamic_model):
         assert dynamic_model.objects.create(field=2)
 
