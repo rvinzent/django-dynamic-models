@@ -74,15 +74,6 @@ class ModelFactory:
 
 
 class FieldFactory:
-    DATA_TYPES = {
-        "character": models.CharField,
-        "text": models.TextField,
-        "integer": models.IntegerField,
-        "float": models.FloatField,
-        "boolean": models.BooleanField,
-        "date": models.DateTimeField,
-    }
-
     def __init__(self, field_schema):
         self.schema = field_schema
 
@@ -92,15 +83,7 @@ class FieldFactory:
         return constructor(**options)
 
     def get_constructor(self):
-        return self.DATA_TYPES[self.schema.data_type]
-
-    @classmethod
-    def data_type_choices(cls):
-        return [(dt, dt) for dt in cls.get_data_types()]
-
-    @classmethod
-    def get_data_types(cls):
-        return cls.DATA_TYPES
+        return getattr(models, self.schema.class_name)
 
 
 def check_model_schema(sender, instance, **kwargs):

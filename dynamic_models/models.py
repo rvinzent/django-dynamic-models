@@ -1,5 +1,6 @@
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
+from django.contrib.postgres.fields import JSONField
 from django.utils.text import slugify
 
 from dynamic_models import config, cache
@@ -70,12 +71,9 @@ class FieldSchema(models.Model):
 
     name = models.CharField(max_length=63)
     model_schema = models.ForeignKey(ModelSchema, on_delete=models.CASCADE, related_name="fields")
-    data_type = models.CharField(
-        max_length=16, choices=FieldFactory.data_type_choices(), editable=False
-    )
     null = models.BooleanField(default=False)
-    unique = models.BooleanField(default=False)
-    max_length = models.PositiveIntegerField(null=True)
+    class_name = models.TextField()
+    kwargs = JSONField(default=dict)
 
     class Meta:
         unique_together = (("name", "model_schema"),)
@@ -128,17 +126,11 @@ class FieldSchema(models.Model):
     def db_column(self):
         return slugify(self.name).replace("-", "_")
 
-    def requires_max_length(self):
-        return self.data_type in self.__class__._MAX_LENGTH_DATA_TYPES
-
     def update_last_modified(self):
         cache.update_last_modified(self.model_schema.initial_model_name)
 
     def get_options(self):
-        options = {"null": self.null, "unique": self.unique}
-        if self.requires_max_length():
-            options["max_length"] = self.max_length or config.default_charfield_max_length()
-        return options
+        return {**self.kwargs, "null": self.null}
 
     def _get_model_with_field(self):
         model = self.model_schema.as_model()

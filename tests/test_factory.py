@@ -65,21 +65,43 @@ class TestModelFactory:
 
 class TestFieldFactory:
     @pytest.mark.parametrize(
-        "data_type, expected_class, options",
+        "class_name, expected_class, options",
         [
-            ("integer", models.IntegerField, {}),
-            ("character", models.CharField, {"max_length": 255}),
-            ("text", models.TextField, {}),
-            ("float", models.FloatField, {}),
-            ("boolean", models.BooleanField, {}),
+            ("IntegerField", models.IntegerField, {}),
+            ("CharField", models.CharField, {"max_length": 255}),
+            ("TextField", models.TextField, {}),
+            ("FloatField", models.FloatField, {}),
+            ("BooleanField", models.BooleanField, {}),
         ],
     )
-    def test_make_field(self, data_type, expected_class, options, model_schema):
-        field_schema = FieldSchema(name="field", data_type=data_type, model_schema=model_schema)
+    def test_make_field(self, class_name, expected_class, options, model_schema):
+        field_schema = FieldSchema(
+            name="field", class_name=class_name, model_schema=model_schema, kwargs=options
+        )
         field = FieldFactory(field_schema).make_field()
         assert isinstance(field, expected_class)
 
     def test_options_are_passed_to_field(self, model_schema, field_schema):
+        field_schema.null = True
+        field = FieldFactory(field_schema).make_field()
+        assert field.null is True
+
+    @pytest.mark.parametrize(
+        "class_name, expected_class, options",
+        [
+            ("ForeignKey", models.ForeignKey, {"on_delete": models.CASCADE}),
+            ("ManyToManyField", models.ManyToManyField, {"blank": True}),
+        ],
+    )
+    def test_table_relationship(
+        self, class_name, expected_class, options, model_schema, another_model_schema
+    ):
+        field_schema = FieldSchema(
+            name="field",
+            class_name=class_name,
+            model_schema=model_schema,
+            kwargs={**options, "to": another_model_schema},
+        )
         field_schema.null = True
         field = FieldFactory(field_schema).make_field()
         assert field.null is True
