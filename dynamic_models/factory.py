@@ -1,3 +1,5 @@
+import importlib
+
 from django.db import models
 from django.utils import timezone
 
@@ -83,7 +85,9 @@ class FieldFactory:
         return constructor(**options)
 
     def get_constructor(self):
-        return getattr(models, self.schema.class_name)
+        module_name, class_name = self.schema.class_name.rsplit('.', maxsplit=1)
+        module = importlib.import_module(module_name)
+        return getattr(module, class_name)
 
 
 def check_model_schema(sender, instance, **kwargs):

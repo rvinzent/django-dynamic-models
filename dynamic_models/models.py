@@ -71,7 +71,6 @@ class FieldSchema(models.Model):
 
     name = models.CharField(max_length=63)
     model_schema = models.ForeignKey(ModelSchema, on_delete=models.CASCADE, related_name="fields")
-    null = models.BooleanField(default=False)
     class_name = models.TextField()
     kwargs = JSONField(default=dict)
 
@@ -126,11 +125,19 @@ class FieldSchema(models.Model):
     def db_column(self):
         return slugify(self.name).replace("-", "_")
 
+    @property
+    def null(self):
+        return self.kwargs.get("null", False)
+
+    @null.setter
+    def null(self, value):
+        self.kwargs['null'] = value
+
     def update_last_modified(self):
         cache.update_last_modified(self.model_schema.initial_model_name)
 
     def get_options(self):
-        return {**self.kwargs, "null": self.null}
+        return {**self.kwargs}
 
     def _get_model_with_field(self):
         model = self.model_schema.as_model()

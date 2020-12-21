@@ -67,11 +67,11 @@ class TestFieldFactory:
     @pytest.mark.parametrize(
         "class_name, expected_class, options",
         [
-            ("IntegerField", models.IntegerField, {}),
-            ("CharField", models.CharField, {"max_length": 255}),
-            ("TextField", models.TextField, {}),
-            ("FloatField", models.FloatField, {}),
-            ("BooleanField", models.BooleanField, {}),
+            ("django.db.models.IntegerField", models.IntegerField, {}),
+            ("django.db.models.CharField", models.CharField, {"max_length": 255}),
+            ("django.db.models.TextField", models.TextField, {}),
+            ("django.db.models.FloatField", models.FloatField, {}),
+            ("django.db.models.BooleanField", models.BooleanField, {}),
         ],
     )
     def test_make_field(self, class_name, expected_class, options, model_schema):
@@ -89,8 +89,8 @@ class TestFieldFactory:
     @pytest.mark.parametrize(
         "class_name, expected_class, options",
         [
-            ("ForeignKey", models.ForeignKey, {"on_delete": models.CASCADE}),
-            ("ManyToManyField", models.ManyToManyField, {"blank": True}),
+            ("django.db.models.ForeignKey", models.ForeignKey, {"on_delete": models.CASCADE}),
+            ("django.db.models.ManyToManyField", models.ManyToManyField, {"blank": True}),
         ],
     )
     def test_table_relationship(

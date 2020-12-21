@@ -54,7 +54,7 @@ class TestModelSchema:
 
     def test_add_field_creates_column(self, model_schema):
         field_schema = FieldSchema(
-            name="special", class_name="IntegerField", model_schema=model_schema
+            name="special", class_name="django.db.models.IntegerField", model_schema=model_schema
         )
         table_name = model_schema.db_table
         column_name = field_schema.db_column
@@ -83,15 +83,15 @@ class TestFieldSchema:
         prohibited_name = "__module__"
         with pytest.raises(InvalidFieldNameError):
             FieldSchema.objects.create(
-                name=prohibited_name, class_name="IntegerField", model_schema=model_schema
+                name=prohibited_name, class_name="django.db.models.IntegerField", model_schema=model_schema
             )
 
     def test_cannot_change_null_to_not_null(self, model_schema):
         null_field = FieldSchema.objects.create(
             name="field",
-            class_name="IntegerField",
+            class_name="django.db.models.IntegerField",
             model_schema=model_schema,
-            null=True,
+            kwargs={"null": True},
         )
         with pytest.raises(NullFieldChangedError):
             null_field.null = False
