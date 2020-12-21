@@ -52,4 +52,4 @@ def another_model_schema(db):
 
 @pytest.fixture
 def field_schema(db, model_schema):
-    return FieldSchema.objects.create(name="field", data_type="integer", model_schema=model_schema)
+    return FieldSchema.objects.create(name="field", class_name="django.db.models.IntegerField", model_schema=model_schema)

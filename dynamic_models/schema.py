@@ -1,5 +1,6 @@
 """Wrapper functions for performing runtime schema changes."""
 from django.db import connection
+from django.db.utils import ProgrammingError
 
 
 class ModelSchemaEditor:
@@ -14,8 +15,15 @@ class ModelSchemaEditor:
         self.initial_model = new_model
 
     def create_table(self, new_model):
-        with connection.schema_editor() as editor:
-            editor.create_model(new_model)
+        try:
+            with connection.schema_editor() as editor:
+                editor.create_model(new_model)
+        except ProgrammingError as err:
+            # TODO: I couldn't figure out why sometimes despite the 
+            # fact that the model exists, the initial_model is None and
+            # therefore this method will be called which leads to this
+            # error
+            pass
 
     def alter_table(self, new_model):
         old_name = self.initial_model._meta.db_table
