@@ -154,8 +154,14 @@ class TestDynamicModels:
         related_instance = related_model.objects.create()
         model_instance = model.objects.create(related=related_instance)
 
+        # related objects should be accessible through related managers
         assert model_instance.related == related_instance
         assert related_instance.parent_objects.first() == model_instance
+
+        # CASCADE should work correctly
+        related_instance.delete()
+        with pytest.raises(model.DoesNotExist):
+            model.objects.get(pk=model_instance.pk)
 
     def test_model_with_many_to_many(self, model_schema, another_model_schema):
         FieldSchema.objects.create(
@@ -171,5 +177,6 @@ class TestDynamicModels:
         related_model_instance = related_model.objects.create()
         model_instance.many_related.add(related_model_instance)
 
+        # related objects should be accessible through related managers
         assert model_instance.many_related.first() == related_model_instance
         assert related_model_instance.related_objects.first() == model_instance
