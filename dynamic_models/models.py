@@ -1,10 +1,9 @@
-from typing import get_args
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
 from django.utils.text import slugify
 
 from dynamic_models import config, cache
-from dynamic_models.factory import ModelFactory, FieldFactory
+from dynamic_models.factory import ModelFactory
 from dynamic_models.exceptions import NullFieldChangedError, InvalidFieldNameError
 from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
 from dynamic_models.utils import ModelRegistry

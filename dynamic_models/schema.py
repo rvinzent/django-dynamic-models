@@ -19,7 +19,7 @@ class ModelSchemaEditor:
             with connection.schema_editor() as editor:
                 editor.create_model(new_model)
         except ProgrammingError as err:
-            # TODO: I couldn't figure out why sometimes despite the 
+            # TODO: I couldn't figure out why sometimes despite the
             # fact that the model exists, the initial_model is None and
             # therefore this method will be called which leads to this
             # error
