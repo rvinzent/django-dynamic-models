@@ -1,4 +1,5 @@
 import pytest
+from django.db import models
 from dynamic_models import cache, utils
 from dynamic_models.exceptions import (
     InvalidFieldNameError,
@@ -135,3 +136,40 @@ class TestDynamicModels:
         model_schema.save()
         with pytest.raises(OutdatedModelError):
             dynamic_model.objects.create(field=4)
+
+    def test_model_with_foreign_key(self, model_schema, another_model_schema):
+        FieldSchema.objects.create(
+            name="related",
+            model_schema=model_schema,
+            class_name="django.db.models.ForeignKey",
+            kwargs={
+                "to": another_model_schema.model_name,
+                "on_delete": models.CASCADE,
+                "related_name": "parent_objects",
+            }
+        )
+        model = model_schema.as_model()
+        related_model = another_model_schema.as_model()
+
+        related_instance = related_model.objects.create()
+        model_instance = model.objects.create(related=related_instance)
+
+        assert model_instance.related == related_instance
+        assert related_instance.parent_objects.first() == model_instance
+
+    def test_model_with_many_to_many(self, model_schema, another_model_schema):
+        FieldSchema.objects.create(
+            name="many_related",
+            model_schema=model_schema,
+            class_name="django.db.models.ManyToManyField",
+            kwargs={"to": another_model_schema.model_name, "related_name": "related_objects"},
+        )
+        model = model_schema.as_model()
+        related_model = another_model_schema.as_model()
+
+        model_instance = model.objects.create()
+        related_model_instance = related_model.objects.create()
+        model_instance.many_related.add(related_model_instance)
+
+        assert model_instance.many_related.first() == related_model_instance
+        assert related_model_instance.related_objects.first() == model_instance

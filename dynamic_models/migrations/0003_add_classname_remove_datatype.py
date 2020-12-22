@@ -1,5 +1,5 @@
-import django.contrib.postgres.fields.jsonb
 from django.db import migrations, models
+from dynamic_models.models import FieldKwargsJSON
 
 
 def set_defaults(apps, schema_editor):
@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="fieldschema",
             name="kwargs",
-            field=django.contrib.postgres.fields.jsonb.JSONField(null=True),
+            field=FieldKwargsJSON(null=True),
         ),
         migrations.RunPython(set_defaults),
         migrations.AlterField(
@@ -48,7 +48,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="fieldschema",
             name="kwargs",
-            field=django.contrib.postgres.fields.jsonb.JSONField(default=dict, null=False),
+            field=FieldKwargsJSON(default=dict, null=False),
         ),
         migrations.RemoveField(
             model_name="fieldschema",
