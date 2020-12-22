@@ -1,8 +1,10 @@
+import json
+
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
 from django.utils.text import slugify
 
-from dynamic_models import config, cache
+from dynamic_models import config, cache, compat
 from dynamic_models.factory import ModelFactory
 from dynamic_models.exceptions import NullFieldChangedError, InvalidFieldNameError
 from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
@@ -64,7 +66,7 @@ class ModelSchema(models.Model):
         return self._factory.get_model()
 
 
-class FieldKwargsJSON(models.JSONField):
+class FieldKwargsJSON(compat.JSONField):
     description = "A field that handles storing models.Field kwargs as JSON"
 
     def to_python(self, value):
@@ -75,7 +77,12 @@ class FieldKwargsJSON(models.JSONField):
             raise ValidationError("Invalid value for 'on_delete'") from err
 
     def from_db_value(self, value, expression, connection):
-        db_value = super().from_db_value(value, expression, connection)
+        # django.contrib.postgres.fields.JSONField does not implement from_db_value
+        # for some reason. In that version, value is already a dict
+        try:
+            db_value = super().from_db_value(value, expression, connection)
+        except AttributeError:
+            db_value = value
         return self._convert_on_delete_to_function(db_value)
 
     def get_prep_value(self, value):
