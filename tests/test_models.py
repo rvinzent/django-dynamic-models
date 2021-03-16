@@ -84,7 +84,9 @@ class TestFieldSchema:
         prohibited_name = "__module__"
         with pytest.raises(InvalidFieldNameError):
             FieldSchema.objects.create(
-                name=prohibited_name, class_name="django.db.models.IntegerField", model_schema=model_schema
+                name=prohibited_name,
+                class_name="django.db.models.IntegerField",
+                model_schema=model_schema
             )
 
     def test_cannot_change_null_to_not_null(self, model_schema):
