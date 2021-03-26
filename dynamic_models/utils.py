@@ -60,8 +60,8 @@ class ModelRegistry:
 
     def get_model(self, model_name):
         try:
-            return apps.get_model(self.app_label, model_name)
-        except LookupError:
+            return apps.all_models[self.app_label][model_name.lower()]
+        except KeyError:
             return None
 
     def unregister_model(self, model_name):
