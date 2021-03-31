@@ -1,6 +1,18 @@
 """Wrapper functions for performing runtime schema changes."""
+from functools import wraps
+
 from django.db import connection
 from django.db.utils import ProgrammingError
+
+
+def set_constraints(func):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        if connection.in_atomic_block:
+            with connection.cursor() as cursor:
+                cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+        return func(*args, **kwargs)
+    return inner
 
 
 class ModelSchemaEditor:
@@ -14,6 +26,7 @@ class ModelSchemaEditor:
             self.create_table(new_model)
         self.initial_model = new_model
 
+    @set_constraints
     def create_table(self, new_model):
         try:
             with connection.schema_editor() as editor:
@@ -25,12 +38,14 @@ class ModelSchemaEditor:
             # error
             pass
 
+    @set_constraints
     def alter_table(self, new_model):
         old_name = self.initial_model._meta.db_table
         new_name = new_model._meta.db_table
         with connection.schema_editor() as editor:
             editor.alter_db_table(new_model, old_name, new_name)
 
+    @set_constraints
     def drop_table(self, model):
         with connection.schema_editor() as editor:
             editor.delete_model(model)
@@ -47,14 +62,17 @@ class FieldSchemaEditor:
             self.add_column(model, new_field)
         self.initial_field = new_field
 
+    @set_constraints
     def add_column(self, model, field):
         with connection.schema_editor() as editor:
             editor.add_field(model, field)
 
+    @set_constraints
     def alter_column(self, model, new_field):
         with connection.schema_editor() as editor:
             editor.alter_field(model, self.initial_field, new_field)
 
+    @set_constraints
     def drop_column(self, model, field):
         with connection.schema_editor() as editor:
             editor.remove_field(model, field)
