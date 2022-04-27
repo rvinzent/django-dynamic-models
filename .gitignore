@@ -1,3 +1,4 @@
+.DS_Store
 .vscode
 .tox
 env
@@ -15,5 +16,7 @@ __pycache__
 .coverage
 .coverage.*
 .pytest_cache/
+.idea/
 
 *.log
+*.swp
