@@ -2,7 +2,6 @@ import importlib
 
 from django.db import models
 from django.utils import timezone
-from django.contrib.gis.db.models import PolygonField
 from dynamic_models import config
 from dynamic_models.exceptions import OutdatedModelError, UnsavedSchemaError
 from dynamic_models.utils import ModelRegistry, is_current_model
