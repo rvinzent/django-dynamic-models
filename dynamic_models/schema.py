@@ -1,10 +1,11 @@
 """Wrapper functions for performing runtime schema changes."""
 from django.db import connections
 from django.db.utils import ProgrammingError
+from django.db.utils import DEFAULT_DB_ALIAS
 
 
 class ModelSchemaEditor:
-    def __init__(self, initial_model=None, db_name='default'):
+    def __init__(self, initial_model=None, db_name=DEFAULT_DB_ALIAS):
         self.initial_model = initial_model
         self.db_name = db_name
 
@@ -38,7 +39,7 @@ class ModelSchemaEditor:
 
 
 class FieldSchemaEditor:
-    def __init__(self, initial_field=None, db_name='default'):
+    def __init__(self, initial_field=None, db_name=DEFAULT_DB_ALIAS):
         self.initial_field = initial_field
         self.db_name = db_name
 

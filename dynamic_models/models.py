@@ -116,7 +116,6 @@ class FieldSchema(models.Model):
     model_schema = models.ForeignKey(ModelSchema, on_delete=models.CASCADE, related_name="fields")
     class_name = models.TextField()
     kwargs = FieldKwargsJSON(default=dict)
-    db_name = models.CharField(max_length=63, null=True)
 
     class Meta:
         unique_together = (("name", "model_schema"),)
@@ -126,7 +125,7 @@ class FieldSchema(models.Model):
         self._initial_name = self.name
         self._initial_null = self.null
         self._initial_field = self.get_registered_model_field()
-        self._schema_editor = FieldSchemaEditor(self._initial_field, db_name=self.db_name)
+        self._schema_editor = FieldSchemaEditor(self._initial_field, db_name=self.model_schema.db_name)
 
     def save(self, **kwargs):
         self.validate()
