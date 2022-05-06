@@ -7,11 +7,12 @@ from dynamic_models.factory import ModelFactory
 from dynamic_models.exceptions import NullFieldChangedError, InvalidFieldNameError
 from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
 from dynamic_models.utils import ModelRegistry
+from django.db.utils import DEFAULT_DB_ALIAS
 
 
 class ModelSchema(models.Model):
     name = models.CharField(max_length=32, unique=True)
-    db_name = models.CharField(max_length=32, unique=False)
+    db_name = models.CharField(max_length=32, unique=False, default=DEFAULT_DB_ALIAS)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
