@@ -7,17 +7,19 @@ from dynamic_models.factory import ModelFactory
 from dynamic_models.exceptions import NullFieldChangedError, InvalidFieldNameError
 from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
 from dynamic_models.utils import ModelRegistry
+from django.db.utils import DEFAULT_DB_ALIAS
 
 
 class ModelSchema(models.Model):
     name = models.CharField(max_length=32, unique=True)
+    db_name = models.CharField(max_length=32, default=DEFAULT_DB_ALIAS)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._registry = ModelRegistry(self.app_label)
         self._initial_name = self.name
         initial_model = self.get_registered_model()
-        self._schema_editor = ModelSchemaEditor(initial_model)
+        self._schema_editor = ModelSchemaEditor(initial_model, db_name=self.db_name)
 
     def save(self, **kwargs):
         super().save(**kwargs)
@@ -124,7 +126,7 @@ class FieldSchema(models.Model):
         self._initial_name = self.name
         self._initial_null = self.null
         self._initial_field = self.get_registered_model_field()
-        self._schema_editor = FieldSchemaEditor(self._initial_field)
+        self._schema_editor = FieldSchemaEditor(self._initial_field, db_name=self.model_schema.db_name)
 
     def save(self, **kwargs):
         self.validate()
