@@ -1,8 +1,10 @@
-import pytest
 from django.db import models
-from dynamic_models.factory import ModelFactory, FieldFactory
-from dynamic_models.utils import receiver_is_connected
+
+import pytest
+
+from dynamic_models.factory import FieldFactory, ModelFactory
 from dynamic_models.models import FieldSchema
+from dynamic_models.utils import receiver_is_connected
 
 
 class TestModelFactory:

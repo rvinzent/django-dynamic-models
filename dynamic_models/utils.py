@@ -1,8 +1,8 @@
 from contextlib import contextmanager
 
-from django.db import connection
 from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
+from django.db import connection
 
 from dynamic_models import cache
 

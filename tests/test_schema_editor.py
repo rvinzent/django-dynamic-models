@@ -1,7 +1,9 @@
-import pytest
 from django.db import models
+
+import pytest
+
+from dynamic_models.schema import FieldSchemaEditor, ModelSchemaEditor
 from dynamic_models.utils import db_table_exists, db_table_has_field
-from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
 
 
 @pytest.fixture(scope="module")
@@ -98,17 +100,13 @@ class TestFieldSchemaEditor:
         assert db_table_has_field("tests_initialmodel", "integer")
 
     @pytest.mark.usefixtures("initial_field_table")
-    def test_update_column_alters_if_exists(
-        self, initial_model, changed_field_name_model
-    ):
+    def test_update_column_alters_if_exists(self, initial_model, changed_field_name_model):
         initial_field = initial_model._meta.get_field("integer")
         new_field = changed_field_name_model._meta.get_field("changed")
         assert db_table_has_field("tests_initialmodel", "integer")
         assert not db_table_has_field("tests_initialmodel", "changed")
 
-        FieldSchemaEditor(initial_field).update_column(
-            changed_field_name_model, new_field
-        )
+        FieldSchemaEditor(initial_field).update_column(changed_field_name_model, new_field)
 
         assert db_table_has_field("tests_initialmodel", "changed")
         assert not db_table_has_field("tests_initialmodel", "integer")
@@ -120,9 +118,7 @@ class TestFieldSchemaEditor:
         assert db_table_has_field("tests_initialmodel", "integer")
         assert not db_table_has_field("tests_initialmodel", "changed")
 
-        FieldSchemaEditor(initial_field).alter_column(
-            changed_field_name_model, new_field
-        )
+        FieldSchemaEditor(initial_field).alter_column(changed_field_name_model, new_field)
 
         assert db_table_has_field("tests_initialmodel", "changed")
         assert not db_table_has_field("tests_initialmodel", "integer")

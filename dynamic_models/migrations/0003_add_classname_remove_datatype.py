@@ -1,4 +1,5 @@
 from django.db import migrations, models
+
 from dynamic_models.models import FieldKwargsJSON
 
 

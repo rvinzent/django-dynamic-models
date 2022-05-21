@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('dynamic_models', '0003_add_classname_remove_datatype'),
+        ("dynamic_models", "0003_add_classname_remove_datatype"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='modelschema',
-            name='db_name',
-            field=models.CharField(default='default', max_length=32),
+            model_name="modelschema",
+            name="db_name",
+            field=models.CharField(default="default", max_length=32),
         ),
     ]

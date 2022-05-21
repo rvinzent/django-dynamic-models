@@ -1,5 +1,7 @@
-import pytest
 from django.db import models
+
+import pytest
+
 from dynamic_models import cache, utils
 from dynamic_models.exceptions import (
     InvalidFieldNameError,
@@ -86,7 +88,7 @@ class TestFieldSchema:
             FieldSchema.objects.create(
                 name=prohibited_name,
                 class_name="django.db.models.IntegerField",
-                model_schema=model_schema
+                model_schema=model_schema,
             )
 
     def test_cannot_change_null_to_not_null(self, model_schema):
@@ -148,7 +150,7 @@ class TestDynamicModels:
                 "to": another_model_schema.model_name,
                 "on_delete": models.CASCADE,
                 "related_name": "parent_objects",
-            }
+            },
         )
         model = model_schema.as_model()
         related_model = another_model_schema.as_model()

@@ -2,9 +2,9 @@
 max-line-length = 100
 exclude =
     .git,
-    .tox,
     __pycache__,
     env,
+    .venv,
     dynamic_models/migrations/*
 
 per-file-ignores =

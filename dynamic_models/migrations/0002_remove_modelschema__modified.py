@@ -6,12 +6,12 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('dynamic_models', '0001_initial'),
+        ("dynamic_models", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='modelschema',
-            name='_modified',
+            model_name="modelschema",
+            name="_modified",
         ),
     ]
