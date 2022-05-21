@@ -1,5 +1,7 @@
 import os
+
 from setuptools import setup
+
 
 README = os.path.join(os.path.dirname(__file__), "README.md")
 with open(README, "r") as f:

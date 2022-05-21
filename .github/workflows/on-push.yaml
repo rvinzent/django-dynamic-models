@@ -1,0 +1,80 @@
+#######################
+# "on push" Test Gate #
+#######################
+---
+name: On Push to Remote Workflow
+on:
+  push:
+
+jobs:
+  #####################################################
+  # [START] on-push Release Gate Tests [PLEASE EDIT!] #
+  #####################################################
+  build:
+    name: Build, Lint, and Unit Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy: 
+      matrix:
+        python-version: [3.8, 3.9]
+        postgres-version: [12, 13, 14]
+
+    env:
+      DJANGO_SETTINGS_MODULE: settings.postgres
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version}}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dynamic_models
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.1.13
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Cache Dependencies
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: poetry-venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install Dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: poetry install -n --no-ansi
+
+      - name: Lint
+        env:
+          DATABASE_NAME: dynamic_models
+          DATABASE_USER: postgres
+          DATABASE_PASSWORD: postgres
+        run: |
+          poetry run python ./manage.py makemigrations --check
+          poetry run black --check .
+          poetry run isort --check .
+          poetry run flake8
+      - name: Test
+        env:
+          DATABASE_NAME: dynamic_models
+          DATABASE_USER: postgres
+          DATABASE_PASSWORD: postgres
+        run: poetry run pytest

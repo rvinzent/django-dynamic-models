@@ -1,8 +1,10 @@
-import pytest
 from django.apps import apps
 from django.core.cache import cache
+
+import pytest
+
+from dynamic_models.models import FieldSchema, ModelSchema
 from dynamic_models.utils import ModelRegistry
-from dynamic_models.models import ModelSchema, FieldSchema
 
 
 TEST_APP_LABEL = "dynamic_models"
@@ -53,7 +55,5 @@ def another_model_schema(db):
 @pytest.fixture
 def field_schema(db, model_schema):
     return FieldSchema.objects.create(
-        name="field",
-        class_name="django.db.models.IntegerField",
-        model_schema=model_schema
+        name="field", class_name="django.db.models.IntegerField", model_schema=model_schema
     )

@@ -1,7 +1,6 @@
 """Wrapper functions for performing runtime schema changes."""
 from django.db import connections
-from django.db.utils import ProgrammingError
-from django.db.utils import DEFAULT_DB_ALIAS
+from django.db.utils import DEFAULT_DB_ALIAS, ProgrammingError
 
 
 class ModelSchemaEditor:

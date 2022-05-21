@@ -1,13 +1,13 @@
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
+from django.db.utils import DEFAULT_DB_ALIAS
 from django.utils.text import slugify
 
-from dynamic_models import config, cache, compat
+from dynamic_models import cache, compat, config
+from dynamic_models.exceptions import InvalidFieldNameError, NullFieldChangedError
 from dynamic_models.factory import ModelFactory
-from dynamic_models.exceptions import NullFieldChangedError, InvalidFieldNameError
-from dynamic_models.schema import ModelSchemaEditor, FieldSchemaEditor
+from dynamic_models.schema import FieldSchemaEditor, ModelSchemaEditor
 from dynamic_models.utils import ModelRegistry
-from django.db.utils import DEFAULT_DB_ALIAS
 
 
 class ModelSchema(models.Model):
@@ -126,7 +126,9 @@ class FieldSchema(models.Model):
         self._initial_name = self.name
         self._initial_null = self.null
         self._initial_field = self.get_registered_model_field()
-        self._schema_editor = FieldSchemaEditor(self._initial_field, db_name=self.model_schema.db_name)
+        self._schema_editor = FieldSchemaEditor(
+            self._initial_field, db_name=self.model_schema.db_name
+        )
 
     def save(self, **kwargs):
         self.validate()
@@ -171,7 +173,7 @@ class FieldSchema(models.Model):
 
     @null.setter
     def null(self, value):
-        self.kwargs['null'] = value
+        self.kwargs["null"] = value
 
     def update_last_modified(self):
         cache.update_last_modified(self.model_schema.initial_model_name)

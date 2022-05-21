@@ -1,5 +1,6 @@
-import pytest
 from django.utils import timezone
+
+import pytest
 
 from dynamic_models import cache
 

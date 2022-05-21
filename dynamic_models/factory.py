@@ -2,6 +2,7 @@ import importlib
 
 from django.db import models
 from django.utils import timezone
+
 from dynamic_models import config
 from dynamic_models.exceptions import OutdatedModelError, UnsavedSchemaError
 from dynamic_models.utils import ModelRegistry, is_current_model
@@ -84,7 +85,7 @@ class FieldFactory:
         return constructor(**options)
 
     def get_constructor(self):
-        module_name, class_name = self.schema.class_name.rsplit('.', maxsplit=1)
+        module_name, class_name = self.schema.class_name.rsplit(".", maxsplit=1)
         module = importlib.import_module(module_name)
         return getattr(module, class_name)
 
