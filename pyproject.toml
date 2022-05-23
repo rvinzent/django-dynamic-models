@@ -4,11 +4,15 @@ version = "0.4.0"
 description = "Dynamic Django models allow users to define, edit, and populate their own database schema."
 authors = ["Ryan Vinzent <ryan.vinzent@gmai;l.com>"]
 license = "MIT License"
+packages = [
+    { include = "dynamic_models" },
+    { include = "dynamic_models/**/*.py" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-Django = ">=3.2,<=4.0"
-psycopg2-binary = "^2.9.3"
+Django = ">=2.2.24,<=4.0"
+psycopg2-binary = "==2.8.6"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
