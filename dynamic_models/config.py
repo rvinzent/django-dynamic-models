@@ -6,11 +6,6 @@ from dynamic_models.apps import DynamicModelsConfig
 def dynamic_models_app_label():
     return _settings().get("USE_APP_LABEL", DynamicModelsConfig.name)
 
-def is_managed_model():
-    return _settings().get("DYNAMIC_MANAGED_MODELS", True)
-
-def use_applabel_prefix_in_tablename():
-    return _settings().get("USE_APPLABEL_IN_TABLE_NAME_PREFIX", True)
 
 def default_fields():
     return _settings().get("DEFAULT_FIELDS", {})

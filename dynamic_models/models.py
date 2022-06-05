@@ -8,12 +8,13 @@ from dynamic_models.exceptions import InvalidFieldNameError, NullFieldChangedErr
 from dynamic_models.factory import ModelFactory
 from dynamic_models.schema import FieldSchemaEditor, ModelSchemaEditor
 from dynamic_models.utils import ModelRegistry
-from dynamic_models.config import is_managed_model
 
 
 class ModelSchema(models.Model):
     name = models.CharField(max_length=32, unique=True)
     db_name = models.CharField(max_length=32, default=DEFAULT_DB_ALIAS)
+    is_managed = models.BooleanField(default=True)
+    use_applable_as_table_prefix = models.BooleanField(default=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,7 +24,7 @@ class ModelSchema(models.Model):
         self._schema_editor = ModelSchemaEditor(
             initial_model=initial_model,
             db_name=self.db_name,
-            is_managed=self.is_managed_model
+            is_managed=self.is_managed
         )
 
     def save(self, **kwargs):
@@ -49,10 +50,6 @@ class ModelSchema(models.Model):
     @property
     def app_label(self):
         return config.dynamic_models_app_label()
-    
-    @property
-    def is_managed_model(self):
-        return config.is_managed_model()
 
     @property
     def model_name(self):
@@ -68,7 +65,7 @@ class ModelSchema(models.Model):
 
     @property
     def db_table(self):
-        if config.use_applabel_prefix_in_tablename():
+        if self.use_applable_as_table_prefix:
             parts = (self.app_label, slugify(self.name).replace("-", "_"))
         else:
             parts = (slugify(self.name).replace("-", "_"),)
@@ -141,7 +138,7 @@ class FieldSchema(models.Model):
         self._schema_editor = FieldSchemaEditor(
             initial_field=self._initial_field,
             db_name=self.model_schema.db_name,
-            is_managed=self.model_schema.is_managed_model
+            is_managed=self.model_schema.is_managed
         )
 
     def save(self, **kwargs):
