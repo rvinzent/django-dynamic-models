@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dynamic_models"
-version = "0.4.1"
+version = "0.4.0"
 description = "Dynamic Django models allow users to define, edit, and populate their own database schema."
 authors = ["Ryan Vinzent <ryan.vinzent@gmai;l.com>"]
 license = "MIT License"

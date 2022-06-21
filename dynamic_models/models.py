@@ -11,31 +11,36 @@ from dynamic_models.utils import ModelRegistry
 
 
 class ModelSchema(models.Model):
-    name = models.CharField(max_length=32, unique=True)
+    name = models.CharField(max_length=250, unique=True)
     db_name = models.CharField(max_length=32, default=DEFAULT_DB_ALIAS)
-    is_managed = models.BooleanField(default=True)
-    use_applable_as_table_prefix = models.BooleanField(default=True)
+    managed = models.BooleanField(default=True)
+    db_table = models.CharField(null=True, max_length=250)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._registry = ModelRegistry(self.app_label)
         self._initial_name = self.name
         initial_model = self.get_registered_model()
-        self._schema_editor = ModelSchemaEditor(
-            initial_model=initial_model,
-            db_name=self.db_name,
-            is_managed=self.is_managed
+        self._schema_editor = (
+            ModelSchemaEditor(
+                initial_model=initial_model,
+                db_name=self.db_name
+            )
+            if self.managed
+            else None
         )
 
     def save(self, **kwargs):
         super().save(**kwargs)
         cache.update_last_modified(self.model_name)
         cache.update_last_modified(self.initial_model_name)
-        self._schema_editor.update_table(self._factory.make_model())
+        if self._schema_editor:
+            self._schema_editor.update_table(self._factory.make_model())
         self._initial_name = self.name
 
     def delete(self, **kwargs):
-        self._schema_editor.drop_table(self.as_model())
+        if self._schema_editor:
+            self._schema_editor.drop_table(self.as_model())
         self._factory.destroy_model()
         cache.clear_last_modified(self.initial_model_name)
         super().delete(**kwargs)
@@ -65,10 +70,10 @@ class ModelSchema(models.Model):
 
     @property
     def db_table(self):
-        if self.use_applable_as_table_prefix:
+        if self.db_table is None:
             parts = (self.app_label, slugify(self.name).replace("-", "_"))
         else:
-            parts = (slugify(self.name).replace("-", "_"),)
+            parts = (slugify(self.db_table).replace("-", "_"),)
         return "_".join(parts)
 
     def as_model(self):
@@ -135,10 +140,13 @@ class FieldSchema(models.Model):
         self._initial_name = self.name
         self._initial_null = self.null
         self._initial_field = self.get_registered_model_field()
-        self._schema_editor = FieldSchemaEditor(
-            initial_field=self._initial_field,
-            db_name=self.model_schema.db_name,
-            is_managed=self.model_schema.is_managed
+        self._schema_editor = (
+            FieldSchemaEditor(
+                initial_field=self._initial_field,
+                db_name=self.model_schema.db_name
+            )
+            if self.model_schema.managed
+            else None
         )
 
     def save(self, **kwargs):
@@ -146,11 +154,13 @@ class FieldSchema(models.Model):
         super().save(**kwargs)
         self.update_last_modified()
         model, field = self._get_model_with_field()
-        self._schema_editor.update_column(model, field)
+        if self._schema_editor:
+            self._schema_editor.update_column(model, field)
 
     def delete(self, **kwargs):
         model, field = self._get_model_with_field()
-        self._schema_editor.drop_column(model, field)
+        if self._schema_editor:
+            self._schema_editor.drop_column(model, field)
         self.update_last_modified()
         super().delete(**kwargs)
 
