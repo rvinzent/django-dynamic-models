@@ -14,7 +14,7 @@ class ModelSchema(models.Model):
     name = models.CharField(max_length=250, unique=True)
     db_name = models.CharField(max_length=32, default=DEFAULT_DB_ALIAS)
     managed = models.BooleanField(default=True)
-    db_table = models.CharField(null=True, max_length=250)
+    db_table_name = models.CharField(null=True, max_length=250)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -70,10 +70,10 @@ class ModelSchema(models.Model):
 
     @property
     def db_table(self):
-        if self.db_table is None:
+        if self.db_table_name is None:
             parts = (self.app_label, slugify(self.name).replace("-", "_"))
         else:
-            parts = (slugify(self.db_table).replace("-", "_"),)
+            parts = (slugify(self.db_table_name).replace("-", "_"),)
         return "_".join(parts)
 
     def as_model(self):

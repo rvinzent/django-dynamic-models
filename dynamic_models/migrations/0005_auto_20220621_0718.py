@@ -20,4 +20,9 @@ class Migration(migrations.Migration):
             name='name',
             field=models.CharField(max_length=250, unique=True),
         ),
+        migrations.AddField(
+            model_name='modelschema',
+            name='db_table_name',
+            field=models.CharField(max_length=250, null=True),
+        ),
     ]
