@@ -15,7 +15,6 @@ class ModelSchema(models.Model):
     db_name = models.CharField(max_length=32, default=DEFAULT_DB_ALIAS)
     managed = models.BooleanField(default=True)
     db_table_name = models.CharField(null=True, max_length=250)
-    username = models.CharField(null=True, max_length=250)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
