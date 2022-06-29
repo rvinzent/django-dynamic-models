@@ -70,11 +70,11 @@ class ModelSchema(models.Model):
 
     @property
     def db_table(self):
-        if self.db_table_name is None:
-            parts = (self.app_label, slugify(self.name).replace("-", "_"))
-        else:
-            parts = (slugify(self.db_table_name).replace("-", "_"),)
-        return "_".join(parts)
+        return self.db_table_name if self.db_table_name else self._default_db_table_name() 
+    
+    def _default_db_table_name(self):
+        safe_name = slugify(self.name).replace("-", "_")
+        return f"{self.app_label}_{safe_name}"
 
     def as_model(self):
         return self._factory.get_model()
