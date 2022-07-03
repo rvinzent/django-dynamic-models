@@ -72,12 +72,6 @@ class TestModelSchema:
         field_schema.delete()
         assert not utils.db_table_has_field(table_name, column_name)
 
-    def model_instances_pass_isinstance_check_after_multiple_model_generations(self, model_schema):
-        model = model_schema.as_model()
-        instance = model.objects.create()
-        regenerated_model = model_schema.as_model()
-        assert isinstance(instance, regenerated_model)
-
 
 class TestFieldSchema:
     def test_cannot_save_with_prohibited_name(self, model_schema):
@@ -170,3 +164,9 @@ class TestDynamicModels:
         # related objects should be accessible through related managers
         assert model_instance.many_related.first() == related_model_instance
         assert related_model_instance.related_objects.first() == model_instance
+
+    def test_model_instances_pass_isinstance_check_across_model_generations(self, model_schema):
+        model = model_schema.as_model()
+        instance = model.objects.create()
+        regenerated_model = model_schema.as_model()
+        assert isinstance(instance, regenerated_model)
