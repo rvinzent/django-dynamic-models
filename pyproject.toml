@@ -10,14 +10,14 @@ packages = [
 version = "0.4.0"
 
 [tool.poetry.dependencies]
-Django = ">=2.2.24,<=4.0"
-psycopg2-binary = "==2.8.6"
+Django = ">=2.2.24"
 python = "^3.8"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
 flake8 = "^4.0.1"
 isort = "^5.10.1"
+psycopg2-binary = ">=2.8.6"
 pytest = "^7.1.2"
 pytest-cov = "^3.0.0"
 pytest-django = "^4.5.2"
