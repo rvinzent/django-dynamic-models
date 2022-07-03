@@ -14,17 +14,17 @@ jobs:
     name: Build, Lint, and Unit Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy: 
+    strategy:
       matrix:
         python-version: [3.8, 3.9]
-        postgres-version: [12, 13, 14]
+        django-version: ["2.2", "3.2", "4.0"]
 
     env:
       DJANGO_SETTINGS_MODULE: settings.postgres
 
     services:
       postgres:
-        image: postgres:${{ matrix.postgres-version}}
+        image: postgres:14
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -61,6 +61,9 @@ jobs:
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: poetry install -n --no-ansi
+
+      - name: Install Django
+        run: pip install Django==${{ matrix.django-version }}
 
       - name: Lint
         env:

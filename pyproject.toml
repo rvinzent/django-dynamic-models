@@ -1,35 +1,35 @@
 [tool.poetry]
-name = "dynamic_models"
-version = "0.4.0"
-description = "Dynamic Django models allow users to define, edit, and populate their own database schema."
 authors = ["Ryan Vinzent <ryan.vinzent@gmai;l.com>"]
+description = "Dynamic Django models allow users to define, edit, and populate their own database schema."
 license = "MIT License"
+name = "dynamic_models"
 packages = [
-    { include = "dynamic_models" },
-    { include = "dynamic_models/**/*.py" },
+  {include = "dynamic_models"},
+  {include = "dynamic_models/**/*.py"},
 ]
+version = "0.4.0"
 
 [tool.poetry.dependencies]
+Django = ">=2.2.24"
 python = "^3.8"
-Django = ">=2.2.24,<=4.0"
-psycopg2-binary = "==2.8.6"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
-isort = "^5.10.1"
 flake8 = "^4.0.1"
+isort = "^5.10.1"
+psycopg2-binary = ">=2.8.6"
 pytest = "^7.1.2"
 pytest-cov = "^3.0.0"
 pytest-django = "^4.5.2"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0"]
 
 [tool.black]
+include = '\.pyi?$'
 line-length = 100
 target-version = ["py38", "py39"]
-include = '\.pyi?$'
 
 [tool.isort]
 atomic = true
@@ -48,5 +48,5 @@ skip_glob = ['**/migrations/**', 'manage.py']
 src_paths = ['dynamic_models', 'settings', 'tests']
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings.test"
+DJANGO_SETTINGS_MODULE = "settings.postgres"
 addopts = "--cov --cov-report term-missing:skip-covered"

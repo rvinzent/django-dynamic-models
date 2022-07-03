@@ -6,23 +6,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('dynamic_models', '0004_modelschema_db_name'),
+        ("dynamic_models", "0004_modelschema_db_name"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='modelschema',
-            name='managed',
+            model_name="modelschema",
+            name="managed",
             field=models.BooleanField(default=True),
         ),
         migrations.AlterField(
-            model_name='modelschema',
-            name='name',
+            model_name="modelschema",
+            name="name",
             field=models.CharField(max_length=250, unique=True),
         ),
         migrations.AddField(
-            model_name='modelschema',
-            name='db_table_name',
+            model_name="modelschema",
+            name="db_table_name",
             field=models.CharField(max_length=250, null=True),
-        )
+        ),
     ]

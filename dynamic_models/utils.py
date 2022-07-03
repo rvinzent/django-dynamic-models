@@ -4,8 +4,6 @@ from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db import connection
 
-from dynamic_models import cache
-
 
 def db_table_exists(table_name):
     with _db_cursor() as c:
@@ -36,19 +34,6 @@ def _db_cursor():
     cursor = connection.cursor()
     yield cursor
     cursor.close()
-
-
-def receiver_is_connected(receiver_name, signal, sender):
-    receivers = signal._live_receivers(sender)
-    receiver_strings = ["{}.{}".format(r.__module__, r.__name__) for r in receivers]
-    return receiver_name in receiver_strings
-
-
-def is_current_model(model):
-    # if there is no cache entry, the model schema has not been updated since
-    # restarting the server and the current schema is fine
-    last_modified = cache.get_last_modified(model.__name__)
-    return last_modified is None or last_modified < model._declared
 
 
 class ModelRegistry:

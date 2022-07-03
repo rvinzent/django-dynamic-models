@@ -2,22 +2,12 @@ from django.db import models
 
 import pytest
 
-from dynamic_models import cache, utils
-from dynamic_models.exceptions import (
-    InvalidFieldNameError,
-    NullFieldChangedError,
-    OutdatedModelError,
-)
+from dynamic_models import utils
+from dynamic_models.exceptions import InvalidFieldNameError, NullFieldChangedError
 from dynamic_models.models import FieldSchema
 
 
 class TestModelSchema:
-    def test_is_current_model(self, model_schema):
-        model = model_schema.as_model()
-        assert utils.is_current_model(model)
-        cache.update_last_modified(model_schema.model_name)
-        assert not utils.is_current_model(model)
-
     def test_model_is_registered_on_create(self, model_registry, unsaved_model_schema):
         assert not model_registry.is_registered(unsaved_model_schema.model_name)
         unsaved_model_schema.save()
@@ -57,7 +47,9 @@ class TestModelSchema:
 
     def test_add_field_creates_column(self, model_schema):
         field_schema = FieldSchema(
-            name="special", class_name="django.db.models.IntegerField", model_schema=model_schema
+            name="special",
+            class_name="django.db.models.IntegerField",
+            model_schema=model_schema,
         )
         table_name = model_schema.db_table
         column_name = field_schema.db_column
@@ -102,12 +94,6 @@ class TestFieldSchema:
             null_field.null = False
             null_field.save()
 
-    def test_related_model_schema_notified_on_field_update(self, model_schema, field_schema):
-        model = model_schema.as_model()
-        assert utils.is_current_model(model)
-        field_schema.update_last_modified()
-        assert not utils.is_current_model(model)
-
 
 @pytest.fixture
 def dynamic_model(model_schema, field_schema):
@@ -135,12 +121,6 @@ class TestDynamicModels:
         with pytest.raises(dynamic_model.DoesNotExist):
             dynamic_model.objects.get(pk=obj.pk)
 
-    def test_cannot_save_with_outdated_model(self, model_schema, dynamic_model):
-        model_schema.name = "new name"
-        model_schema.save()
-        with pytest.raises(OutdatedModelError):
-            dynamic_model.objects.create(field=4)
-
     def test_model_with_foreign_key(self, model_schema, another_model_schema):
         FieldSchema.objects.create(
             name="related",
@@ -152,8 +132,8 @@ class TestDynamicModels:
                 "related_name": "parent_objects",
             },
         )
-        model = model_schema.as_model()
         related_model = another_model_schema.as_model()
+        model = model_schema.as_model()
 
         related_instance = related_model.objects.create()
         model_instance = model.objects.create(related=related_instance)
@@ -174,8 +154,8 @@ class TestDynamicModels:
             class_name="django.db.models.ManyToManyField",
             kwargs={"to": another_model_schema.model_name, "related_name": "related_objects"},
         )
-        model = model_schema.as_model()
         related_model = another_model_schema.as_model()
+        model = model_schema.as_model()
 
         model_instance = model.objects.create()
         related_model_instance = related_model.objects.create()
@@ -184,3 +164,9 @@ class TestDynamicModels:
         # related objects should be accessible through related managers
         assert model_instance.many_related.first() == related_model_instance
         assert related_model_instance.related_objects.first() == model_instance
+
+    def test_model_instances_pass_isinstance_check_across_model_generations(self, model_schema):
+        model = model_schema.as_model()
+        instance = model.objects.create()
+        regenerated_model = model_schema.as_model()
+        assert isinstance(instance, regenerated_model)
