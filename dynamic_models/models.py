@@ -3,7 +3,7 @@ from django.db import models
 from django.db.utils import DEFAULT_DB_ALIAS
 from django.utils.text import slugify
 
-from dynamic_models import cache, compat, config
+from dynamic_models import compat, config
 from dynamic_models.exceptions import InvalidFieldNameError, NullFieldChangedError
 from dynamic_models.factory import ModelFactory
 from dynamic_models.schema import FieldSchemaEditor, ModelSchemaEditor
@@ -22,27 +22,22 @@ class ModelSchema(models.Model):
         self._initial_name = self.name
         initial_model = self.get_registered_model()
         self._schema_editor = (
-            ModelSchemaEditor(
-                initial_model=initial_model,
-                db_name=self.db_name
-            )
+            ModelSchemaEditor(initial_model=initial_model, db_name=self.db_name)
             if self.managed
             else None
         )
 
     def save(self, **kwargs):
         super().save(**kwargs)
-        cache.update_last_modified(self.model_name)
-        cache.update_last_modified(self.initial_model_name)
         if self._schema_editor:
-            self._schema_editor.update_table(self._factory.make_model())
+            self._schema_editor.update_table(self._factory.get_model())
+
         self._initial_name = self.name
 
     def delete(self, **kwargs):
         if self._schema_editor:
             self._schema_editor.drop_table(self.as_model())
         self._factory.destroy_model()
-        cache.clear_last_modified(self.initial_model_name)
         super().delete(**kwargs)
 
     def get_registered_model(self):
@@ -70,8 +65,8 @@ class ModelSchema(models.Model):
 
     @property
     def db_table(self):
-        return self.db_table_name if self.db_table_name else self._default_db_table_name() 
-    
+        return self.db_table_name if self.db_table_name else self._default_db_table_name()
+
     def _default_db_table_name(self):
         safe_name = slugify(self.name).replace("-", "_")
         return f"{self.app_label}_{safe_name}"
@@ -141,10 +136,7 @@ class FieldSchema(models.Model):
         self._initial_null = self.null
         self._initial_field = self.get_registered_model_field()
         self._schema_editor = (
-            FieldSchemaEditor(
-                initial_field=self._initial_field,
-                db_name=self.model_schema.db_name
-            )
+            FieldSchemaEditor(initial_field=self._initial_field, db_name=self.model_schema.db_name)
             if self.model_schema.managed
             else None
         )
@@ -152,7 +144,6 @@ class FieldSchema(models.Model):
     def save(self, **kwargs):
         self.validate()
         super().save(**kwargs)
-        self.update_last_modified()
         model, field = self._get_model_with_field()
         if self._schema_editor:
             self._schema_editor.update_column(model, field)
@@ -161,7 +152,6 @@ class FieldSchema(models.Model):
         model, field = self._get_model_with_field()
         if self._schema_editor:
             self._schema_editor.drop_column(model, field)
-        self.update_last_modified()
         super().delete(**kwargs)
 
     def validate(self):
@@ -195,9 +185,6 @@ class FieldSchema(models.Model):
     @null.setter
     def null(self, value):
         self.kwargs["null"] = value
-
-    def update_last_modified(self):
-        cache.update_last_modified(self.model_schema.initial_model_name)
 
     def get_options(self):
         return self.kwargs.copy()
