@@ -1,8 +1,6 @@
 import importlib
-from urllib.parse import non_hierarchical
 
 from django.db import models
-from django.utils import timezone
 
 from dynamic_models import config
 from dynamic_models.exceptions import UnsavedSchemaError
