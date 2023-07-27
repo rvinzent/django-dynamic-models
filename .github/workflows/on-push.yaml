@@ -5,6 +5,7 @@
 name: On Push to Remote Workflow
 on:
   push:
+  pull_request:
 
 jobs:
   #####################################################
