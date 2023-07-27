@@ -1,8 +1,5 @@
-#######################
-# "on push" Test Gate #
-#######################
 ---
-name: On Push to Remote Workflow
+name: testing
 on:
   push:
   pull_request:
@@ -12,7 +9,7 @@ jobs:
   # [START] on-push Release Gate Tests [PLEASE EDIT!] #
   #####################################################
   build:
-    name: Build, Lint, and Unit Test
+    name: Build, Lint, and Test with Python ${{ matrix.python-version }}, Django ${{ matrix.django-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
