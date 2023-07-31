@@ -8,10 +8,6 @@ class DynamicModelError(Exception):
     """Base exception for use in dynamic models."""
 
 
-class OutdatedModelError(DynamicModelError):
-    """Raised when a model's schema is outdated on save."""
-
-
 class NullFieldChangedError(DynamicModelError):
     """Raised when a field is attempted to be change from NULL to NOT NULL."""
 

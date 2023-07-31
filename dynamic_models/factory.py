@@ -1,11 +1,22 @@
 import importlib
 
 from django.db import models
-from django.utils import timezone
 
 from dynamic_models import config
-from dynamic_models.exceptions import OutdatedModelError, UnsavedSchemaError
-from dynamic_models.utils import ModelRegistry, is_current_model
+from dynamic_models.exceptions import UnsavedSchemaError
+from dynamic_models.utils import ModelRegistry
+
+
+class DynamicModelBase(models.base.ModelBase):
+    def __instancecheck__(cls, instance):
+        if issubclass(type(instance.__class__), DynamicModelBase):
+            return cls._class_descriptor(instance.__class__) == cls._class_descriptor(cls)
+
+        return super().__instancecheck__(instance)
+
+    @staticmethod
+    def _class_descriptor(class_):
+        return (class_.__module__, class_.__qualname__)
 
 
 class ModelFactory:
@@ -14,26 +25,18 @@ class ModelFactory:
         self.registry = ModelRegistry(model_schema.app_label)
 
     def get_model(self):
-        registered = self.get_registered_model()
-        if registered and is_current_model(registered):
-            return registered
-        return self.make_model()
-
-    def make_model(self):
         if not self.schema.pk:
             raise UnsavedSchemaError(
                 f"Cannot create a model for schema '{self.schema.name}'"
                 " because it has not been saved to the database"
             )
+
         self.unregister_model()
-        model = type(self.schema.model_name, (models.Model,), self.get_properties())
-        _connect_schema_checker(model)
-        return model
+        return DynamicModelBase(self.schema.model_name, (models.Model,), self.get_properties())
 
     def destroy_model(self):
-        last_model = self.get_registered_model()
-        if last_model:
-            _disconnect_schema_checker(last_model)
+        registered_model = self.get_registered_model()
+        if registered_model is not None:
             self.unregister_model()
 
     def get_registered_model(self):
@@ -55,16 +58,13 @@ class ModelFactory:
     def _base_properties(self):
         return {
             "__module__": "{}.models".format(self.schema.app_label),
-            "_declared": timezone.now(),
             "Meta": self._model_meta(),
         }
 
     def _custom_fields(self):
-        fields = {}
-        for field_schema in self.schema.fields.all():
-            model_field = FieldFactory(field_schema).make_field()
-            fields[field_schema.db_column] = model_field
-        return fields
+        return {
+            field.db_column: FieldFactory(field).make_field() for field in self.schema.fields.all()
+        }
 
     def _model_meta(self):
         class Meta:
@@ -81,37 +81,10 @@ class FieldFactory:
 
     def make_field(self):
         options = self.schema.get_options()
-        constructor = self.get_constructor()
-        return constructor(**options)
+        field_class = self.get_field_class()
+        return field_class(**options)
 
-    def get_constructor(self):
+    def get_field_class(self):
         module_name, class_name = self.schema.class_name.rsplit(".", maxsplit=1)
         module = importlib.import_module(module_name)
         return getattr(module, class_name)
-
-
-def check_model_schema(sender, instance, **kwargs):
-    """
-    Check that the schema being used is the most up-to-date.
-
-    Called on pre_save to guard against the possibility of a model schema change
-    between instance instantiation and record save.
-    """
-    if not is_current_model(sender):
-        raise OutdatedModelError(f"model {sender.__name__} has changed")
-
-
-def _connect_schema_checker(model):
-    models.signals.pre_save.connect(
-        check_model_schema, sender=model, dispatch_uid=_get_signal_uid(model.__name__)
-    )
-
-
-def _disconnect_schema_checker(model):
-    models.signals.pre_save.disconnect(
-        check_model_schema, sender=model, dispatch_uid=_get_signal_uid(model.__name__)
-    )
-
-
-def _get_signal_uid(model_name):
-    return "{}_model_schema".format(model_name)

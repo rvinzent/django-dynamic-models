@@ -1,4 +1,6 @@
-# django-dynamic-models [![Build Status](https://travis-ci.com/rvinzent/django-dynamic-models.svg?branch=master)](https://travis-ci.com/rvinzent/django-dynamic-models) ![PyPI](https://img.shields.io/pypi/v/django-dynamic-model?label=django-dynamic-model)
+# django-dynamic-models
+
+![PyPI](https://img.shields.io/pypi/v/django-dynamic-model?label=django-dynamic-model)
 
 
 ## Overview

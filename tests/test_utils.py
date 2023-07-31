@@ -3,12 +3,12 @@ import pytest
 
 def test_get_model(model_schema, model_registry):
     registered_model = model_registry.get_model(model_schema.model_name)
-    assert registered_model == model_schema.as_model()
+    assert registered_model.__name__ == model_schema.as_model().__name__
 
 
 def test_unregister_model(model_schema, model_registry):
     registered_model = model_registry.get_model(model_schema.model_name)
-    assert registered_model == model_schema.as_model()
+    assert registered_model.__name__ == model_schema.as_model().__name__
     model_registry.unregister_model(model_schema.model_name)
 
 
