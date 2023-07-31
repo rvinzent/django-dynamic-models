@@ -1,5 +1,5 @@
 [tool.poetry]
-authors = ["Ryan Vinzent <ryan.vinzent@gmai;l.com>"]
+authors = ["Ryan Vinzent <ryan.vinzent@gmail.com>"]
 description = "Dynamic Django models allow users to define, edit, and populate their own database schema."
 license = "MIT License"
 name = "dynamic_models"
@@ -7,7 +7,7 @@ packages = [
   {include = "dynamic_models"},
   {include = "dynamic_models/**/*.py"},
 ]
-version = "0.4.0"
+version = "0.4.0rc0"
 
 [tool.poetry.dependencies]
 Django = ">=2.2.24"
