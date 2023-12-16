@@ -17,3 +17,4 @@ DATABASES = {"default": {"ENGINE": "django.db.backends.dummy"}}
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
 }
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
